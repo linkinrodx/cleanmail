@@ -7,20 +7,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useActions, useAddAction } from "@/lib/queries/actions";
 import type { PersistedAction } from "../../shared/rpc-types";
 
-type MailboxContextValue = {
-	activeMailboxPath: string;
-	setActiveMailboxPath: (path: string) => void;
-};
-
-export const MailboxContext = createContext<MailboxContextValue>({
-	activeMailboxPath: "INBOX",
-	setActiveMailboxPath: () => {},
-});
-
-export function useMailboxContext() {
-	return useContext(MailboxContext);
-}
-
 type DragContextValue = {
 	draggingUid: number | null;
 	setDraggingUid: (uid: number | null) => void;
@@ -121,7 +107,6 @@ export const Route = createRootRoute({
 });
 
 function RootLayout() {
-	const [activeMailboxPath, setActiveMailboxPath] = useState("INBOX");
 	const [draggingUid, setDraggingUid] = useState<number | null>(null);
 	const dropHandlerRef = useRef<(toMailboxPath: string) => void>(() => {});
 
@@ -147,22 +132,17 @@ function RootLayout() {
 
 	return (
 		<TooltipProvider>
-			<MailboxContext value={{ activeMailboxPath, setActiveMailboxPath }}>
-				<DragContext value={dragContextValue}>
-					<ActionsContext value={{ actions, addAction }}>
-						<SidebarProvider>
-							<MailboxSidebar
-								activeMailboxPath={activeMailboxPath}
-								onSelectMailbox={setActiveMailboxPath}
-							/>
-							<SidebarInset>
-								<Outlet />
-							</SidebarInset>
-						</SidebarProvider>
-						<Toaster />
-					</ActionsContext>
-				</DragContext>
-			</MailboxContext>
+			<DragContext value={dragContextValue}>
+				<ActionsContext value={{ actions, addAction }}>
+					<SidebarProvider>
+						<MailboxSidebar />
+						<SidebarInset>
+							<Outlet />
+						</SidebarInset>
+					</SidebarProvider>
+					<Toaster />
+				</ActionsContext>
+			</DragContext>
 		</TooltipProvider>
 	);
 }

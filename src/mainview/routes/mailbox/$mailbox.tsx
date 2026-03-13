@@ -10,10 +10,6 @@ import {
 import { GripVerticalIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-	ImapSetupDialog,
-	ImapSetupTrigger,
-} from "@/components/ImapSetupDialog";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
@@ -27,15 +23,14 @@ import {
 import {
 	useDeleteEmail,
 	useEmails,
-	useImapConfig,
 	useMailboxes,
 	useMoveEmail,
 } from "@/lib/queries/imap";
-import type { Email } from "../../shared/rpc-types";
-import { useActionsContext, useDragContext } from "./__root";
+import type { Email } from "../../../shared/rpc-types";
+import { useActionsContext, useDragContext } from "../__root";
 
-export const Route = createFileRoute("/")({
-	component: IndexPage,
+export const Route = createFileRoute("/mailbox/$mailbox")({
+	component: MailboxPage,
 });
 
 /** Extract the bare email address from a "Name <addr>" or plain "addr" string */
@@ -136,17 +131,16 @@ function buildColumns(onDelete: (uid: number) => void): ColumnDef<Email>[] {
 	];
 }
 
-function IndexPage() {
-	const activeMailboxPath = "INBOX";
+function MailboxPage() {
+	const { mailbox: encodedMailbox } = Route.useParams();
+	const mailboxPath = decodeURIComponent(encodedMailbox);
 
-	const [setupOpen, setSetupOpen] = useState(false);
 	const [sorting, setSorting] = useState<SortingState>([
 		{ id: "date", desc: true },
 	]);
 	const { draggingUid, setDraggingUid, registerDropHandler } = useDragContext();
 	const { addAction } = useActionsContext();
 
-	const { data: imapConfig, isLoading: configLoading } = useImapConfig();
 	const { data: mailboxesData } = useMailboxes();
 	const trashMailboxPath = mailboxesData?.mailboxes.find(
 		(m) => m.specialUse === "\\Trash",
@@ -157,12 +151,9 @@ function IndexPage() {
 		isError,
 		error,
 		refetch,
-	} = useEmails(activeMailboxPath);
-	const { mutate: deleteEmail } = useDeleteEmail(
-		activeMailboxPath,
-		trashMailboxPath,
-	);
-	const { mutate: moveEmail } = useMoveEmail(activeMailboxPath);
+	} = useEmails(mailboxPath);
+	const { mutate: deleteEmail } = useDeleteEmail(mailboxPath, trashMailboxPath);
+	const { mutate: moveEmail } = useMoveEmail(mailboxPath);
 
 	const emails = emailsData?.emails ?? [];
 
@@ -170,7 +161,7 @@ function IndexPage() {
 	useEffect(() => {
 		registerDropHandler((toMailboxPath) => {
 			if (draggingUid === null) return;
-			if (toMailboxPath === activeMailboxPath) return;
+			if (toMailboxPath === mailboxPath) return;
 
 			const uid = draggingUid;
 
@@ -192,7 +183,7 @@ function IndexPage() {
 									type: "move",
 									uid,
 									authorEmail,
-									fromMailboxPath: activeMailboxPath,
+									fromMailboxPath: mailboxPath,
 									toMailboxPath,
 								});
 							}
@@ -211,7 +202,14 @@ function IndexPage() {
 				},
 			);
 		});
-	}, [registerDropHandler, moveEmail, draggingUid, emails, addAction]);
+	}, [
+		registerDropHandler,
+		moveEmail,
+		draggingUid,
+		mailboxPath,
+		emails,
+		addAction,
+	]);
 
 	const fetchError = emailsData?.error ?? (isError ? String(error) : null);
 
@@ -240,7 +238,7 @@ function IndexPage() {
 						type: "delete",
 						uid,
 						authorEmail,
-						mailboxPath: activeMailboxPath,
+						mailboxPath,
 					});
 				}
 			},
@@ -258,10 +256,10 @@ function IndexPage() {
 		getSortedRowModel: getSortedRowModel(),
 	});
 
-	const isLoading = configLoading || emailsLoading;
-	const isConfigured = !!imapConfig;
-
-	const mailboxDisplayName = "Inbox";
+	const mailboxDisplayName =
+		mailboxPath === "INBOX"
+			? "Inbox"
+			: (mailboxPath.split(/[./\\]/).pop() ?? mailboxPath);
 
 	return (
 		<div className="flex min-h-screen flex-col bg-background">
@@ -278,38 +276,28 @@ function IndexPage() {
 						variant="ghost"
 						size="icon-sm"
 						onClick={() => refetch()}
-						disabled={isLoading}
+						disabled={emailsLoading}
 						title="Refresh"
 					>
 						<RefreshCwIcon
 							data-icon="inline"
-							className={isLoading ? "animate-spin" : undefined}
+							className={emailsLoading ? "animate-spin" : undefined}
 						/>
 						<span className="sr-only">Refresh</span>
 					</Button>
-					<ImapSetupTrigger onOpenChange={setSetupOpen} />
 				</div>
 			</header>
 
 			{/* Main content */}
 			<main className="flex flex-1 flex-col">
-				{!isConfigured && !configLoading ? (
-					<div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-						<p className="text-sm text-muted-foreground">
-							No IMAP account configured yet.
-						</p>
-						<Button onClick={() => setSetupOpen(true)}>
-							Set up IMAP Account
-						</Button>
-					</div>
-				) : fetchError ? (
+				{fetchError ? (
 					<div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
 						<p className="text-sm text-destructive">{fetchError}</p>
 						<Button variant="outline" onClick={() => refetch()}>
 							Try again
 						</Button>
 					</div>
-				) : isLoading ? (
+				) : emailsLoading ? (
 					<div className="flex flex-1 items-center justify-center p-8">
 						<p className="text-sm text-muted-foreground">Loading…</p>
 					</div>
@@ -365,8 +353,6 @@ function IndexPage() {
 					</Table>
 				)}
 			</main>
-
-			<ImapSetupDialog open={setupOpen} onOpenChange={setSetupOpen} />
 		</div>
 	);
 }

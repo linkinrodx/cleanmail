@@ -146,25 +146,28 @@ function getPinnedOrder(mailbox: Mailbox): number {
 
 type MailboxItemProps = {
 	mailbox: Mailbox;
-	activeMailboxPath: string;
-	onSelect: (path: string) => void;
+	currentPathname: string;
 };
 
-function MailboxItem({
-	mailbox,
-	activeMailboxPath,
-	onSelect,
-}: MailboxItemProps) {
+function MailboxItem({ mailbox, currentPathname }: MailboxItemProps) {
 	const Icon = getMailboxIcon(mailbox);
 	const label = getMailboxLabel(mailbox);
-	const isActive = mailbox.path === activeMailboxPath;
+
+	// "/" maps to INBOX; all others use "/mailbox/<encoded>"
+	const href =
+		mailbox.path === "INBOX"
+			? "/"
+			: `/mailbox/${encodeURIComponent(mailbox.path)}`;
+	const isActive =
+		mailbox.path === "INBOX"
+			? currentPathname === "/"
+			: currentPathname === `/mailbox/${encodeURIComponent(mailbox.path)}`;
 
 	const { draggingUid, onDropToMailbox, setDraggingUid } = useDragContext();
 	const [isDragOver, setIsDragOver] = useState(false);
 
 	// Only show drop target when there's an active drag and it's not the current mailbox
-	const isDroppable =
-		draggingUid !== null && mailbox.path !== activeMailboxPath;
+	const isDroppable = draggingUid !== null && !isActive;
 
 	function handleDragOver(e: React.DragEvent<HTMLLIElement>) {
 		if (!isDroppable) return;
@@ -203,9 +206,9 @@ function MailboxItem({
 		>
 			<SidebarMenuButton
 				isActive={isActive}
-				onClick={() => onSelect(mailbox.path)}
 				title={mailbox.path}
 				className={isDragOver ? "pointer-events-none" : undefined}
+				render={<Link to={href} />}
 			>
 				<Icon />
 				<span>{label}</span>
@@ -269,21 +272,13 @@ function ActionItem({ action, currentHref }: ActionItemProps) {
 	);
 }
 
-type MailboxSidebarProps = {
-	activeMailboxPath: string;
-	onSelectMailbox: (path: string) => void;
-};
-
-export function MailboxSidebar({
-	activeMailboxPath,
-	onSelectMailbox,
-}: MailboxSidebarProps) {
+export function MailboxSidebar() {
 	const { data, isLoading } = useMailboxes();
 	const createMailbox = useCreateMailbox();
 	const { actions } = useActionsContext();
 	const routerState = useRouterState();
 
-	const currentHref = routerState.location.pathname;
+	const currentPathname = routerState.location.pathname;
 
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [newMailboxName, setNewMailboxName] = useState("");
@@ -337,8 +332,7 @@ export function MailboxSidebar({
 											<MailboxItem
 												key={mailbox.path}
 												mailbox={mailbox}
-												activeMailboxPath={activeMailboxPath}
-												onSelect={onSelectMailbox}
+												currentPathname={currentPathname}
 											/>
 										))}
 							</SidebarMenu>
@@ -358,8 +352,7 @@ export function MailboxSidebar({
 											<MailboxItem
 												key={mailbox.path}
 												mailbox={mailbox}
-												activeMailboxPath={activeMailboxPath}
-												onSelect={onSelectMailbox}
+												currentPathname={currentPathname}
 											/>
 										))}
 									</SidebarMenu>
@@ -381,7 +374,7 @@ export function MailboxSidebar({
 											<ActionItem
 												key={getActionHref(action)}
 												action={action}
-												currentHref={currentHref}
+												currentHref={currentPathname}
 											/>
 										))}
 									</SidebarMenu>
