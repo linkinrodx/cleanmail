@@ -51,6 +51,10 @@ export type CleanMailRPC = {
 				params: { name: string };
 				response: { success: boolean; error?: string };
 			};
+			deleteEmail: {
+				params: { mailboxPath: string; uid: number };
+				response: { success: boolean; error?: string };
+			};
 		};
 		messages: Record<never, never>;
 	}>;

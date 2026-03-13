@@ -7,7 +7,7 @@ import {
 	type SortingState,
 	useReactTable,
 } from "@tanstack/react-table";
-import { RefreshCwIcon } from "lucide-react";
+import { RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import {
 	ImapSetupDialog,
@@ -23,7 +23,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { useEmails, useImapConfig } from "@/lib/queries/imap";
+import { useDeleteEmail, useEmails, useImapConfig } from "@/lib/queries/imap";
 import type { Email } from "../../shared/rpc-types";
 import { useMailboxContext } from "./__root";
 
@@ -31,62 +31,89 @@ export const Route = createFileRoute("/")({
 	component: IndexPage,
 });
 
-const columns: ColumnDef<Email>[] = [
-	{
-		id: "status",
-		header: "",
-		size: 8,
-		cell: ({ row }) =>
-			row.original.seen ? null : (
-				<span className="block size-2 rounded-full bg-primary" title="Unread" />
-			),
-	},
-	{
-		accessorKey: "from",
-		header: "From",
-		cell: ({ getValue }) => (
-			<span className="block max-w-48 truncate">{String(getValue())}</span>
-		),
-	},
-	{
-		accessorKey: "subject",
-		header: "Subject",
-		cell: ({ row, getValue }) => (
-			<span
-				className={row.original.seen ? "text-muted-foreground" : "font-medium"}
-			>
-				{String(getValue())}
-			</span>
-		),
-	},
-	{
-		accessorKey: "date",
-		header: "Date",
-		cell: ({ getValue }) => {
-			const iso = String(getValue());
-			const date = new Date(iso);
-			const now = new Date();
-			const isToday = date.toDateString() === now.toDateString();
-			return (
-				<span className="whitespace-nowrap text-xs text-muted-foreground">
-					{isToday
-						? date.toLocaleTimeString(undefined, {
-								hour: "2-digit",
-								minute: "2-digit",
-							})
-						: date.toLocaleDateString(undefined, {
-								month: "short",
-								day: "numeric",
-								year:
-									date.getFullYear() !== now.getFullYear()
-										? "numeric"
-										: undefined,
-							})}
-				</span>
-			);
+function buildColumns(onDelete: (uid: number) => void): ColumnDef<Email>[] {
+	return [
+		{
+			id: "status",
+			header: "",
+			size: 8,
+			cell: ({ row }) =>
+				row.original.seen ? null : (
+					<span
+						className="block size-2 rounded-full bg-primary"
+						title="Unread"
+					/>
+				),
 		},
-	},
-];
+		{
+			accessorKey: "from",
+			header: "From",
+			cell: ({ getValue }) => (
+				<span className="block max-w-48 truncate">{String(getValue())}</span>
+			),
+		},
+		{
+			accessorKey: "subject",
+			header: "Subject",
+			cell: ({ row, getValue }) => (
+				<span
+					className={
+						row.original.seen ? "text-muted-foreground" : "font-medium"
+					}
+				>
+					{String(getValue())}
+				</span>
+			),
+		},
+		{
+			accessorKey: "date",
+			header: "Date",
+			cell: ({ getValue }) => {
+				const iso = String(getValue());
+				const date = new Date(iso);
+				const now = new Date();
+				const isToday = date.toDateString() === now.toDateString();
+				return (
+					<span className="whitespace-nowrap text-xs text-muted-foreground">
+						{isToday
+							? date.toLocaleTimeString(undefined, {
+									hour: "2-digit",
+									minute: "2-digit",
+								})
+							: date.toLocaleDateString(undefined, {
+									month: "short",
+									day: "numeric",
+									year:
+										date.getFullYear() !== now.getFullYear()
+											? "numeric"
+											: undefined,
+								})}
+					</span>
+				);
+			},
+		},
+		{
+			id: "actions",
+			header: "",
+			size: 32,
+			cell: ({ row }) => (
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					title="Delete"
+					onClick={(e) => {
+						e.stopPropagation();
+						onDelete(row.original.uid);
+					}}
+					className="text-muted-foreground hover:text-destructive"
+				>
+					<Trash2Icon data-icon="inline" />
+					<span className="sr-only">Delete</span>
+				</Button>
+			),
+		},
+	];
+}
 
 function IndexPage() {
 	const [setupOpen, setSetupOpen] = useState(false);
@@ -103,9 +130,12 @@ function IndexPage() {
 		error,
 		refetch,
 	} = useEmails(activeMailboxPath);
+	const { mutate: deleteEmail } = useDeleteEmail(activeMailboxPath);
 
 	const emails = emailsData?.emails ?? [];
 	const fetchError = emailsData?.error ?? (isError ? String(error) : null);
+
+	const columns = buildColumns((uid) => deleteEmail(uid));
 
 	const table = useReactTable({
 		data: emails,
