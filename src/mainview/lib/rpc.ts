@@ -22,8 +22,11 @@ export const fetchEmails = (mailboxPath: string) =>
 export const fetchMailboxes = () => rpc.request.fetchMailboxes();
 export const createMailbox = (name: string) =>
 	rpc.request.createMailbox({ name });
-export const deleteEmail = (mailboxPath: string, uid: number) =>
-	rpc.request.deleteEmail({ mailboxPath, uid });
+export const deleteEmail = (
+	mailboxPath: string,
+	uid: number,
+	trashMailboxPath?: string,
+) => rpc.request.deleteEmail({ mailboxPath, uid, trashMailboxPath });
 export const moveEmail = (
 	fromMailboxPath: string,
 	toMailboxPath: string,

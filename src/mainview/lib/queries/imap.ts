@@ -65,14 +65,23 @@ export function useCreateMailbox() {
 	});
 }
 
-export function useDeleteEmail(mailboxPath: string) {
+export function useDeleteEmail(mailboxPath: string, trashMailboxPath?: string) {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (uid: number) => deleteEmail(mailboxPath, uid),
+		mutationFn: (uid: number) =>
+			deleteEmail(mailboxPath, uid, trashMailboxPath),
 		onSuccess: () => {
 			queryClient.invalidateQueries({
 				queryKey: emailKeys.byMailbox(mailboxPath),
 			});
+			if (
+				trashMailboxPath &&
+				trashMailboxPath.toLowerCase() !== mailboxPath.toLowerCase()
+			) {
+				queryClient.invalidateQueries({
+					queryKey: emailKeys.byMailbox(trashMailboxPath),
+				});
+			}
 			queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
 		},
 	});

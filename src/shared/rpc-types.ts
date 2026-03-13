@@ -52,7 +52,11 @@ export type CleanMailRPC = {
 				response: { success: boolean; error?: string };
 			};
 			deleteEmail: {
-				params: { mailboxPath: string; uid: number };
+				params: {
+					mailboxPath: string;
+					uid: number;
+					trashMailboxPath?: string;
+				};
 				response: { success: boolean; error?: string };
 			};
 			moveEmail: {

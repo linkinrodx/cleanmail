@@ -368,7 +368,7 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 				}
 			},
 
-			deleteEmail: async ({ mailboxPath, uid }) => {
+			deleteEmail: async ({ mailboxPath, uid, trashMailboxPath }) => {
 				const configJson = await keytar.getPassword(
 					KEYTAR_SERVICE,
 					KEYTAR_ACCOUNT_CONFIG,
@@ -403,11 +403,28 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 				try {
 					await client.connect();
 
-					const lock = await client.getMailboxLock(mailboxPath);
-					try {
-						await client.messageDelete({ uid }, { uid: true });
-					} finally {
-						lock.release();
+					// If a trash mailbox exists and the email is not already in it,
+					// move to trash instead of permanently deleting.
+					const alreadyInTrash =
+						trashMailboxPath &&
+						mailboxPath.toLowerCase() === trashMailboxPath.toLowerCase();
+
+					if (trashMailboxPath && !alreadyInTrash) {
+						const lock = await client.getMailboxLock(mailboxPath);
+						try {
+							await client.messageMove({ uid }, trashMailboxPath, {
+								uid: true,
+							});
+						} finally {
+							lock.release();
+						}
+					} else {
+						const lock = await client.getMailboxLock(mailboxPath);
+						try {
+							await client.messageDelete({ uid }, { uid: true });
+						} finally {
+							lock.release();
+						}
 					}
 
 					await client.logout();

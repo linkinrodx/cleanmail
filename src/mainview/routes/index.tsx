@@ -28,6 +28,7 @@ import {
 	useDeleteEmail,
 	useEmails,
 	useImapConfig,
+	useMailboxes,
 	useMoveEmail,
 } from "@/lib/queries/imap";
 import type { Email } from "../../shared/rpc-types";
@@ -138,6 +139,10 @@ function IndexPage() {
 	const { draggingUid, setDraggingUid, registerDropHandler } = useDragContext();
 
 	const { data: imapConfig, isLoading: configLoading } = useImapConfig();
+	const { data: mailboxesData } = useMailboxes();
+	const trashMailboxPath = mailboxesData?.mailboxes.find(
+		(m) => m.specialUse === "\\Trash",
+	)?.path;
 	const {
 		data: emailsData,
 		isLoading: emailsLoading,
@@ -145,7 +150,10 @@ function IndexPage() {
 		error,
 		refetch,
 	} = useEmails(activeMailboxPath);
-	const { mutate: deleteEmail } = useDeleteEmail(activeMailboxPath);
+	const { mutate: deleteEmail } = useDeleteEmail(
+		activeMailboxPath,
+		trashMailboxPath,
+	);
 	const { mutate: moveEmail } = useMoveEmail(activeMailboxPath);
 
 	// Register the drop handler so the sidebar can trigger a move
