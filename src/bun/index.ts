@@ -22,9 +22,10 @@ async function getMainViewUrl(): Promise<string> {
 
 const url = await getMainViewUrl();
 
-const _mainWindow = new BrowserWindow({
+new BrowserWindow({
 	title: "CleanMail",
 	url,
+	titleBarStyle: "hidden",
 });
 
-console.log("CleanMail started!");
+console.log("Cleanmail started!");

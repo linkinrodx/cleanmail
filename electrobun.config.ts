@@ -4,19 +4,19 @@ export default {
 	app: {
 		name: "CleanMail",
 		identifier: "cleanmail.app",
-		version: "0.0.1",
+		version: "0.1.0",
 	},
 	build: {
+		// Vite builds to dist/, we copy from there
 		copy: {
 			"dist/index.html": "views/mainview/index.html",
 			"dist/assets": "views/mainview/assets",
 		},
-		watchIgnore: ["dist/**"],
 		mac: {
 			bundleCEF: false,
 		},
 		linux: {
-			bundleCEF: false,
+			bundleCEF: true,
 		},
 		win: {
 			bundleCEF: false,
