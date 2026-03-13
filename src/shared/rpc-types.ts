@@ -6,6 +6,23 @@ export type ImapConfig = {
 	username: string;
 };
 
+export type MoveActionData = {
+	uid: number;
+	authorEmail: string;
+	fromMailboxPath: string;
+	toMailboxPath: string;
+};
+
+export type DeleteActionData = {
+	uid: number;
+	authorEmail: string;
+	mailboxPath: string;
+};
+
+export type PersistedAction =
+	| { action: "MOVE"; createdAt: string; data: MoveActionData }
+	| { action: "DELETE"; createdAt: string; data: DeleteActionData };
+
 export type Email = {
 	uid: number;
 	subject: string;
@@ -61,6 +78,18 @@ export type CleanMailRPC = {
 			};
 			moveEmail: {
 				params: { fromMailboxPath: string; toMailboxPath: string; uid: number };
+				response: { success: boolean; error?: string };
+			};
+			getActions: {
+				params: void;
+				response: { actions: PersistedAction[]; error?: string };
+			};
+			addAction: {
+				params: PersistedAction;
+				response: { success: boolean; error?: string };
+			};
+			removeAction: {
+				params: { createdAt: string };
 				response: { success: boolean; error?: string };
 			};
 		};

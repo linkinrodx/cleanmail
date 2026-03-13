@@ -1,5 +1,5 @@
 import { Electroview } from "electrobun/view";
-import type { CleanMailRPC } from "../../shared/rpc-types";
+import type { CleanMailRPC, PersistedAction } from "../../shared/rpc-types";
 
 const rpc = Electroview.defineRPC<CleanMailRPC>({
 	handlers: {
@@ -32,3 +32,9 @@ export const moveEmail = (
 	toMailboxPath: string,
 	uid: number,
 ) => rpc.request.moveEmail({ fromMailboxPath, toMailboxPath, uid });
+
+export const getActions = () => rpc.request.getActions();
+export const addAction = (action: PersistedAction) =>
+	rpc.request.addAction(action);
+export const removeAction = (createdAt: string) =>
+	rpc.request.removeAction({ createdAt });

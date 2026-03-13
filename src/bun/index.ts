@@ -1,7 +1,14 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { BrowserView, BrowserWindow, Updater } from "electrobun/bun";
 import { ImapFlow } from "imapflow";
 import keytar from "keytar";
-import type { CleanMailRPC, Email, Mailbox } from "../shared/rpc-types";
+import type {
+	CleanMailRPC,
+	Email,
+	Mailbox,
+	PersistedAction,
+} from "../shared/rpc-types";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
@@ -9,6 +16,52 @@ const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
 const KEYTAR_SERVICE = "cleanmail";
 const KEYTAR_ACCOUNT_CONFIG = "imap-config";
 const KEYTAR_ACCOUNT_PASSWORD = "imap-password";
+
+const APP_NAME = "cleanmail";
+
+/**
+ * Returns the OS-appropriate application data directory, mirroring Tauri's
+ * path resolution:
+ *   - Linux:   $XDG_DATA_HOME/cleanmail  (fallback: ~/.local/share/cleanmail)
+ *   - macOS:   ~/Library/Application Support/cleanmail
+ *   - Windows: %APPDATA%\cleanmail
+ */
+function getAppDataDir(): string {
+	const platform = process.platform;
+	const home = process.env.HOME ?? process.env.USERPROFILE ?? ".";
+
+	if (platform === "linux") {
+		const xdgDataHome =
+			process.env.XDG_DATA_HOME ?? join(home, ".local", "share");
+		return join(xdgDataHome, APP_NAME);
+	}
+	if (platform === "darwin") {
+		return join(home, "Library", "Application Support", APP_NAME);
+	}
+	// Windows
+	const appData = process.env.APPDATA ?? join(home, "AppData", "Roaming");
+	return join(appData, APP_NAME);
+}
+
+const APP_DATA_DIR = getAppDataDir();
+const ACTIONS_FILE = join(APP_DATA_DIR, "actions.json");
+
+async function readActions(): Promise<PersistedAction[]> {
+	try {
+		const file = Bun.file(ACTIONS_FILE);
+		const exists = await file.exists();
+		if (!exists) return [];
+		const text = await file.text();
+		return JSON.parse(text) as PersistedAction[];
+	} catch {
+		return [];
+	}
+}
+
+async function writeActions(actions: PersistedAction[]): Promise<void> {
+	await mkdir(APP_DATA_DIR, { recursive: true });
+	await Bun.write(ACTIONS_FILE, JSON.stringify(actions, null, 2));
+}
 
 async function getMainViewUrl(): Promise<string> {
 	const channel = await Updater.localInfo.channel();
@@ -435,6 +488,66 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 					} catch {
 						// ignore logout errors
 					}
+					return {
+						success: false,
+						error: err instanceof Error ? err.message : String(err),
+					};
+				}
+			},
+
+			getActions: async () => {
+				try {
+					const actions = await readActions();
+					return { actions };
+				} catch (err) {
+					return {
+						actions: [],
+						error: err instanceof Error ? err.message : String(err),
+					};
+				}
+			},
+
+			addAction: async (newAction) => {
+				try {
+					const actions = await readActions();
+					// Deduplicate by comparing action type + key fields
+					const isDuplicate = actions.some((a) => {
+						if (a.action !== newAction.action) return false;
+						if (a.action === "MOVE" && newAction.action === "MOVE") {
+							return (
+								a.data.uid === newAction.data.uid &&
+								a.data.fromMailboxPath === newAction.data.fromMailboxPath &&
+								a.data.toMailboxPath === newAction.data.toMailboxPath
+							);
+						}
+						if (a.action === "DELETE" && newAction.action === "DELETE") {
+							return (
+								a.data.uid === newAction.data.uid &&
+								a.data.mailboxPath === newAction.data.mailboxPath
+							);
+						}
+						return false;
+					});
+					if (!isDuplicate) {
+						actions.push(newAction);
+						await writeActions(actions);
+					}
+					return { success: true };
+				} catch (err) {
+					return {
+						success: false,
+						error: err instanceof Error ? err.message : String(err),
+					};
+				}
+			},
+
+			removeAction: async ({ createdAt }) => {
+				try {
+					const actions = await readActions();
+					const filtered = actions.filter((a) => a.createdAt !== createdAt);
+					await writeActions(filtered);
+					return { success: true };
+				} catch (err) {
 					return {
 						success: false,
 						error: err instanceof Error ? err.message : String(err),

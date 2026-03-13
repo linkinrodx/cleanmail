@@ -4,6 +4,8 @@ import { MailboxSidebar } from "@/components/MailboxSidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useActions, useAddAction } from "@/lib/queries/actions";
+import type { PersistedAction } from "../../shared/rpc-types";
 
 type MailboxContextValue = {
 	activeMailboxPath: string;
@@ -56,6 +58,50 @@ export type DeleteAction = {
 
 export type EmailAction = MoveAction | DeleteAction;
 
+/** Convert a local EmailAction to the persisted format with a timestamp. */
+function toPersistedAction(action: EmailAction): PersistedAction {
+	if (action.type === "move") {
+		return {
+			action: "MOVE",
+			createdAt: new Date().toISOString(),
+			data: {
+				uid: action.uid,
+				authorEmail: action.authorEmail,
+				fromMailboxPath: action.fromMailboxPath,
+				toMailboxPath: action.toMailboxPath,
+			},
+		};
+	}
+	return {
+		action: "DELETE",
+		createdAt: new Date().toISOString(),
+		data: {
+			uid: action.uid,
+			authorEmail: action.authorEmail,
+			mailboxPath: action.mailboxPath,
+		},
+	};
+}
+
+/** Convert a persisted action back to the local EmailAction shape. */
+export function fromPersistedAction(persisted: PersistedAction): EmailAction {
+	if (persisted.action === "MOVE") {
+		return {
+			type: "move",
+			uid: persisted.data.uid,
+			authorEmail: persisted.data.authorEmail,
+			fromMailboxPath: persisted.data.fromMailboxPath,
+			toMailboxPath: persisted.data.toMailboxPath,
+		};
+	}
+	return {
+		type: "delete",
+		uid: persisted.data.uid,
+		authorEmail: persisted.data.authorEmail,
+		mailboxPath: persisted.data.mailboxPath,
+	};
+}
+
 type ActionsContextValue = {
 	actions: EmailAction[];
 	addAction: (action: EmailAction) => void;
@@ -79,28 +125,15 @@ function RootLayout() {
 	const [draggingUid, setDraggingUid] = useState<number | null>(null);
 	const dropHandlerRef = useRef<(toMailboxPath: string) => void>(() => {});
 
-	const [actions, setActions] = useState<EmailAction[]>([]);
+	const { data: persistedActions = [] } = useActions();
+	const { mutate: persistAddAction } = useAddAction();
+
+	// Map persisted actions (sorted DESC by createdAt from the query) to
+	// the legacy EmailAction shape consumed by existing route components.
+	const actions: EmailAction[] = persistedActions.map(fromPersistedAction);
 
 	function addAction(action: EmailAction) {
-		setActions((prev) => {
-			// Deduplicate: same type + same uid + same paths = same action
-			const isDuplicate = prev.some((a) => {
-				if (a.type !== action.type) return false;
-				if (a.type === "move" && action.type === "move") {
-					return (
-						a.uid === action.uid &&
-						a.fromMailboxPath === action.fromMailboxPath &&
-						a.toMailboxPath === action.toMailboxPath
-					);
-				}
-				if (a.type === "delete" && action.type === "delete") {
-					return a.uid === action.uid && a.mailboxPath === action.mailboxPath;
-				}
-				return false;
-			});
-			if (isDuplicate) return prev;
-			return [...prev, action];
-		});
+		persistAddAction(toPersistedAction(action));
 	}
 
 	const dragContextValue: DragContextValue = {
