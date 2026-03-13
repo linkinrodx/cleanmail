@@ -7,8 +7,9 @@ import {
 	type SortingState,
 	useReactTable,
 } from "@tanstack/react-table";
-import { RefreshCwIcon, Trash2Icon } from "lucide-react";
-import { useState } from "react";
+import { GripVerticalIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
 	ImapSetupDialog,
 	ImapSetupTrigger,
@@ -23,9 +24,14 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { useDeleteEmail, useEmails, useImapConfig } from "@/lib/queries/imap";
+import {
+	useDeleteEmail,
+	useEmails,
+	useImapConfig,
+	useMoveEmail,
+} from "@/lib/queries/imap";
 import type { Email } from "../../shared/rpc-types";
-import { useMailboxContext } from "./__root";
+import { useDragContext, useMailboxContext } from "./__root";
 
 export const Route = createFileRoute("/")({
 	component: IndexPage,
@@ -33,6 +39,14 @@ export const Route = createFileRoute("/")({
 
 function buildColumns(onDelete: (uid: number) => void): ColumnDef<Email>[] {
 	return [
+		{
+			id: "drag-handle",
+			header: "",
+			size: 24,
+			cell: () => (
+				<GripVerticalIcon className="size-3.5 text-muted-foreground/40 group-hover/row:text-muted-foreground/70 transition-colors" />
+			),
+		},
 		{
 			id: "status",
 			header: "",
@@ -121,6 +135,7 @@ function IndexPage() {
 		{ id: "date", desc: true },
 	]);
 	const { activeMailboxPath } = useMailboxContext();
+	const { draggingUid, setDraggingUid, registerDropHandler } = useDragContext();
 
 	const { data: imapConfig, isLoading: configLoading } = useImapConfig();
 	const {
@@ -131,9 +146,55 @@ function IndexPage() {
 		refetch,
 	} = useEmails(activeMailboxPath);
 	const { mutate: deleteEmail } = useDeleteEmail(activeMailboxPath);
+	const { mutate: moveEmail } = useMoveEmail(activeMailboxPath);
+
+	// Register the drop handler so the sidebar can trigger a move
+	useEffect(() => {
+		registerDropHandler((toMailboxPath) => {
+			if (draggingUid === null) return;
+			if (toMailboxPath === activeMailboxPath) return;
+
+			const uid = draggingUid;
+			const toastId = toast.loading("Moving email…");
+
+			moveEmail(
+				{ uid, toMailboxPath },
+				{
+					onSuccess: (result) => {
+						if (result.success) {
+							toast.success("Email moved", { id: toastId });
+						} else {
+							toast.error(result.error ?? "Failed to move email", {
+								id: toastId,
+							});
+						}
+					},
+					onError: (err) => {
+						toast.error(
+							err instanceof Error ? err.message : "Failed to move email",
+							{ id: toastId },
+						);
+					},
+				},
+			);
+		});
+	}, [registerDropHandler, moveEmail, draggingUid, activeMailboxPath]);
 
 	const emails = emailsData?.emails ?? [];
 	const fetchError = emailsData?.error ?? (isError ? String(error) : null);
+
+	function handleDragStart(
+		e: React.DragEvent<HTMLTableRowElement>,
+		uid: number,
+	) {
+		e.dataTransfer.setData("application/x-cleanmail-email-uid", String(uid));
+		e.dataTransfer.effectAllowed = "move";
+		setDraggingUid(uid);
+	}
+
+	function handleDragEnd() {
+		setDraggingUid(null);
+	}
 
 	const columns = buildColumns((uid) => deleteEmail(uid));
 
@@ -149,7 +210,6 @@ function IndexPage() {
 	const isLoading = configLoading || emailsLoading;
 	const isConfigured = !!imapConfig;
 
-	// Display name for the active mailbox
 	const mailboxDisplayName =
 		activeMailboxPath === "INBOX"
 			? "Inbox"
@@ -229,18 +289,30 @@ function IndexPage() {
 							))}
 						</TableHeader>
 						<TableBody>
-							{table.getRowModel().rows.map((row) => (
-								<TableRow key={row.id}>
-									{row.getVisibleCells().map((cell) => (
-										<TableCell key={cell.id}>
-											{flexRender(
-												cell.column.columnDef.cell,
-												cell.getContext(),
-											)}
-										</TableCell>
-									))}
-								</TableRow>
-							))}
+							{table.getRowModel().rows.map((row) => {
+								const uid = row.original.uid;
+								const isDragging = draggingUid === uid;
+								return (
+									<TableRow
+										key={row.id}
+										draggable
+										onDragStart={(e) => handleDragStart(e, uid)}
+										onDragEnd={handleDragEnd}
+										className={`group/row cursor-grab active:cursor-grabbing transition-opacity ${
+											isDragging ? "opacity-40" : ""
+										}`}
+									>
+										{row.getVisibleCells().map((cell) => (
+											<TableCell key={cell.id}>
+												{flexRender(
+													cell.column.columnDef.cell,
+													cell.getContext(),
+												)}
+											</TableCell>
+										))}
+									</TableRow>
+								);
+							})}
 						</TableBody>
 					</Table>
 				)}

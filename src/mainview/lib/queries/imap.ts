@@ -5,6 +5,7 @@ import {
 	fetchEmails,
 	fetchMailboxes,
 	getImapConfig,
+	moveEmail,
 	saveImapConfig,
 } from "../rpc";
 
@@ -71,6 +72,28 @@ export function useDeleteEmail(mailboxPath: string) {
 		onSuccess: () => {
 			queryClient.invalidateQueries({
 				queryKey: emailKeys.byMailbox(mailboxPath),
+			});
+			queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
+		},
+	});
+}
+
+export function useMoveEmail(fromMailboxPath: string) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: ({
+			uid,
+			toMailboxPath,
+		}: {
+			uid: number;
+			toMailboxPath: string;
+		}) => moveEmail(fromMailboxPath, toMailboxPath, uid),
+		onSuccess: (_data, { toMailboxPath }) => {
+			queryClient.invalidateQueries({
+				queryKey: emailKeys.byMailbox(fromMailboxPath),
+			});
+			queryClient.invalidateQueries({
+				queryKey: emailKeys.byMailbox(toMailboxPath),
 			});
 			queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
 		},

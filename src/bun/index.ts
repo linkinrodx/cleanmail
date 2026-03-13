@@ -311,6 +311,63 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 				}
 			},
 
+			moveEmail: async ({ fromMailboxPath, toMailboxPath, uid }) => {
+				const configJson = await keytar.getPassword(
+					KEYTAR_SERVICE,
+					KEYTAR_ACCOUNT_CONFIG,
+				);
+				const password = await keytar.getPassword(
+					KEYTAR_SERVICE,
+					KEYTAR_ACCOUNT_PASSWORD,
+				);
+
+				if (!configJson || !password) {
+					return { success: false, error: "IMAP not configured" };
+				}
+
+				let config: { host: string; port: number; username: string };
+				try {
+					config = JSON.parse(configJson);
+				} catch {
+					return { success: false, error: "Invalid IMAP config" };
+				}
+
+				const client = new ImapFlow({
+					host: config.host,
+					port: config.port,
+					secure: config.port === 993,
+					auth: {
+						user: config.username,
+						pass: password,
+					},
+					logger: false,
+				});
+
+				try {
+					await client.connect();
+
+					const lock = await client.getMailboxLock(fromMailboxPath);
+					try {
+						await client.messageMove({ uid }, toMailboxPath, { uid: true });
+					} finally {
+						lock.release();
+					}
+
+					await client.logout();
+					return { success: true };
+				} catch (err) {
+					try {
+						await client.logout();
+					} catch {
+						// ignore logout errors
+					}
+					return {
+						success: false,
+						error: err instanceof Error ? err.message : String(err),
+					};
+				}
+			},
+
 			deleteEmail: async ({ mailboxPath, uid }) => {
 				const configJson = await keytar.getPassword(
 					KEYTAR_SERVICE,

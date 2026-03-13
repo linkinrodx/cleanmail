@@ -55,6 +55,10 @@ export type CleanMailRPC = {
 				params: { mailboxPath: string; uid: number };
 				response: { success: boolean; error?: string };
 			};
+			moveEmail: {
+				params: { fromMailboxPath: string; toMailboxPath: string; uid: number };
+				response: { success: boolean; error?: string };
+			};
 		};
 		messages: Record<never, never>;
 	}>;

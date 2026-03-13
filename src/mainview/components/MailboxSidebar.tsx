@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useCreateMailbox, useMailboxes } from "@/lib/queries/imap";
 import type { Mailbox } from "../../shared/rpc-types";
+import { useDragContext } from "../routes/__root";
 
 // Special-use attribute values per RFC 6154 + common Gmail/IMAP extensions
 const SPECIAL_USE_ICONS: Record<string, LucideIcon> = {
@@ -154,12 +155,53 @@ function MailboxItem({
 	const label = getMailboxLabel(mailbox);
 	const isActive = mailbox.path === activeMailboxPath;
 
+	const { draggingUid, onDropToMailbox, setDraggingUid } = useDragContext();
+	const [isDragOver, setIsDragOver] = useState(false);
+
+	// Only show drop target when there's an active drag and it's not the current mailbox
+	const isDroppable =
+		draggingUid !== null && mailbox.path !== activeMailboxPath;
+
+	function handleDragOver(e: React.DragEvent<HTMLLIElement>) {
+		if (!isDroppable) return;
+		e.preventDefault();
+		e.dataTransfer.dropEffect = "move";
+		setIsDragOver(true);
+	}
+
+	function handleDragLeave(e: React.DragEvent<HTMLLIElement>) {
+		// Only clear if we're leaving the element (not entering a child)
+		if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+			setIsDragOver(false);
+		}
+	}
+
+	function handleDrop(e: React.DragEvent<HTMLLIElement>) {
+		e.preventDefault();
+		setIsDragOver(false);
+		if (!isDroppable) return;
+		setDraggingUid(null);
+		onDropToMailbox(mailbox.path);
+	}
+
 	return (
-		<SidebarMenuItem>
+		<SidebarMenuItem
+			onDragOver={handleDragOver}
+			onDragLeave={handleDragLeave}
+			onDrop={handleDrop}
+			className={
+				isDragOver
+					? "rounded-md ring-2 ring-primary ring-offset-1 ring-offset-sidebar bg-primary/10"
+					: isDroppable
+						? "rounded-md ring-1 ring-border/60 transition-all"
+						: undefined
+			}
+		>
 			<SidebarMenuButton
 				isActive={isActive}
 				onClick={() => onSelect(mailbox.path)}
 				title={mailbox.path}
+				className={isDragOver ? "pointer-events-none" : undefined}
 			>
 				<Icon />
 				<span>{label}</span>
