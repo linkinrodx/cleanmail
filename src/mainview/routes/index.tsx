@@ -32,11 +32,17 @@ import {
 	useMoveEmail,
 } from "@/lib/queries/imap";
 import type { Email } from "../../shared/rpc-types";
-import { useDragContext, useMailboxContext } from "./__root";
+import { useActionsContext, useDragContext, useMailboxContext } from "./__root";
 
 export const Route = createFileRoute("/")({
 	component: IndexPage,
 });
+
+/** Extract the bare email address from a "Name <addr>" or plain "addr" string */
+function extractEmailAddress(from: string): string {
+	const match = from.match(/<([^>]+)>/);
+	return match ? match[1].trim() : from.trim();
+}
 
 function buildColumns(onDelete: (uid: number) => void): ColumnDef<Email>[] {
 	return [
@@ -137,6 +143,7 @@ function IndexPage() {
 	]);
 	const { activeMailboxPath } = useMailboxContext();
 	const { draggingUid, setDraggingUid, registerDropHandler } = useDragContext();
+	const { addAction } = useActionsContext();
 
 	const { data: imapConfig, isLoading: configLoading } = useImapConfig();
 	const { data: mailboxesData } = useMailboxes();
@@ -156,6 +163,8 @@ function IndexPage() {
 	);
 	const { mutate: moveEmail } = useMoveEmail(activeMailboxPath);
 
+	const emails = emailsData?.emails ?? [];
+
 	// Register the drop handler so the sidebar can trigger a move
 	useEffect(() => {
 		registerDropHandler((toMailboxPath) => {
@@ -163,6 +172,11 @@ function IndexPage() {
 			if (toMailboxPath === activeMailboxPath) return;
 
 			const uid = draggingUid;
+
+			// Find the email being dragged to get its author address
+			const email = emails.find((e) => e.uid === uid);
+			const authorEmail = email ? extractEmailAddress(email.from) : "";
+
 			const toastId = toast.loading("Moving email…");
 
 			moveEmail(
@@ -171,6 +185,16 @@ function IndexPage() {
 					onSuccess: (result) => {
 						if (result.success) {
 							toast.success("Email moved", { id: toastId });
+							// Record the action for the sidebar
+							if (authorEmail) {
+								addAction({
+									type: "move",
+									uid,
+									authorEmail,
+									fromMailboxPath: activeMailboxPath,
+									toMailboxPath,
+								});
+							}
 						} else {
 							toast.error(result.error ?? "Failed to move email", {
 								id: toastId,
@@ -186,9 +210,15 @@ function IndexPage() {
 				},
 			);
 		});
-	}, [registerDropHandler, moveEmail, draggingUid, activeMailboxPath]);
+	}, [
+		registerDropHandler,
+		moveEmail,
+		draggingUid,
+		activeMailboxPath,
+		emails,
+		addAction,
+	]);
 
-	const emails = emailsData?.emails ?? [];
 	const fetchError = emailsData?.error ?? (isError ? String(error) : null);
 
 	function handleDragStart(
@@ -204,7 +234,26 @@ function IndexPage() {
 		setDraggingUid(null);
 	}
 
-	const columns = buildColumns((uid) => deleteEmail(uid));
+	function handleDelete(uid: number) {
+		// Find the email to get the author address before deletion
+		const email = emails.find((e) => e.uid === uid);
+		const authorEmail = email ? extractEmailAddress(email.from) : "";
+
+		deleteEmail(uid, {
+			onSuccess: (result) => {
+				if (result.success && authorEmail) {
+					addAction({
+						type: "delete",
+						uid,
+						authorEmail,
+						mailboxPath: activeMailboxPath,
+					});
+				}
+			},
+		});
+	}
+
+	const columns = buildColumns(handleDelete);
 
 	const table = useReactTable({
 		data: emails,

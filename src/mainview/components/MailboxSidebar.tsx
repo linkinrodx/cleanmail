@@ -1,9 +1,12 @@
+import { Link, useRouterState } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 import {
 	ArchiveIcon,
 	FileEditIcon,
+	FolderInputIcon,
 	InboxIcon,
 	MailIcon,
+	MoveRightIcon,
 	PlusIcon,
 	SendIcon,
 	ShieldAlertIcon,
@@ -38,7 +41,8 @@ import {
 } from "@/components/ui/sidebar";
 import { useCreateMailbox, useMailboxes } from "@/lib/queries/imap";
 import type { Mailbox } from "../../shared/rpc-types";
-import { useDragContext } from "../routes/__root";
+import type { EmailAction } from "../routes/__root";
+import { useActionsContext, useDragContext } from "../routes/__root";
 
 // Special-use attribute values per RFC 6154 + common Gmail/IMAP extensions
 const SPECIAL_USE_ICONS: Record<string, LucideIcon> = {
@@ -213,6 +217,58 @@ function MailboxItem({
 	);
 }
 
+function getMailboxShortLabel(mailboxPath: string): string {
+	if (mailboxPath === "INBOX") return "Inbox";
+	return mailboxPath.split(/[./\\]/).pop() ?? mailboxPath;
+}
+
+function getActionHref(action: EmailAction): string {
+	if (action.type === "move") {
+		return `/actions/${encodeURIComponent(action.fromMailboxPath)}/move/${encodeURIComponent(action.authorEmail)}/to/${encodeURIComponent(action.toMailboxPath)}`;
+	}
+	return `/actions/${encodeURIComponent(action.mailboxPath)}/delete/${encodeURIComponent(action.authorEmail)}`;
+}
+
+function getActionTitle(action: EmailAction): string {
+	if (action.type === "move") {
+		return `Move from ${getMailboxShortLabel(action.fromMailboxPath)} to ${getMailboxShortLabel(action.toMailboxPath)}`;
+	}
+	return `Delete email of ${getMailboxShortLabel(action.mailboxPath)}`;
+}
+
+function getActionIcon(action: EmailAction): LucideIcon {
+	if (action.type === "move") return MoveRightIcon;
+	return FolderInputIcon;
+}
+
+type ActionItemProps = {
+	action: EmailAction;
+	currentHref: string;
+};
+
+function ActionItem({ action, currentHref }: ActionItemProps) {
+	const href = getActionHref(action);
+	const title = getActionTitle(action);
+	const Icon = getActionIcon(action);
+	const isActive = currentHref === href;
+
+	return (
+		<SidebarMenuItem>
+			<SidebarMenuButton isActive={isActive} title={title}>
+				<Link to={href} className="flex items-center gap-2 w-full">
+					<Icon className="shrink-0 size-4" />
+					<span className="flex flex-col leading-tight min-w-0">
+						<span className="truncate">{title}</span>
+						<span className="truncate text-xs text-muted-foreground font-normal">
+							{action.authorEmail}
+						</span>
+					</span>
+				</Link>
+			</SidebarMenuButton>
+		</SidebarMenuItem>
+	);
+}
+
 type MailboxSidebarProps = {
 	activeMailboxPath: string;
 	onSelectMailbox: (path: string) => void;
@@ -224,6 +280,10 @@ export function MailboxSidebar({
 }: MailboxSidebarProps) {
 	const { data, isLoading } = useMailboxes();
 	const createMailbox = useCreateMailbox();
+	const { actions } = useActionsContext();
+	const routerState = useRouterState();
+
+	const currentHref = routerState.location.pathname;
 
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [newMailboxName, setNewMailboxName] = useState("");
@@ -300,6 +360,28 @@ export function MailboxSidebar({
 												mailbox={mailbox}
 												activeMailboxPath={activeMailboxPath}
 												onSelect={onSelectMailbox}
+											/>
+										))}
+									</SidebarMenu>
+								</SidebarGroupContent>
+							</SidebarGroup>
+						</>
+					)}
+
+					{/* Actions group — shown only when there are recorded actions */}
+					{actions.length > 0 && (
+						<>
+							<Separator className="mx-2 w-auto" />
+
+							<SidebarGroup>
+								<SidebarGroupLabel>Actions</SidebarGroupLabel>
+								<SidebarGroupContent>
+									<SidebarMenu>
+										{actions.map((action) => (
+											<ActionItem
+												key={getActionHref(action)}
+												action={action}
+												currentHref={currentHref}
 											/>
 										))}
 									</SidebarMenu>

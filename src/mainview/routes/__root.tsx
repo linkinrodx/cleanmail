@@ -37,6 +37,39 @@ export function useDragContext() {
 	return useContext(DragContext);
 }
 
+export type MoveAction = {
+	type: "move";
+	/** IMAP UID of the email that was acted on */
+	uid: number;
+	/** Author email address extracted from the "from" field */
+	authorEmail: string;
+	fromMailboxPath: string;
+	toMailboxPath: string;
+};
+
+export type DeleteAction = {
+	type: "delete";
+	uid: number;
+	authorEmail: string;
+	mailboxPath: string;
+};
+
+export type EmailAction = MoveAction | DeleteAction;
+
+type ActionsContextValue = {
+	actions: EmailAction[];
+	addAction: (action: EmailAction) => void;
+};
+
+export const ActionsContext = createContext<ActionsContextValue>({
+	actions: [],
+	addAction: () => {},
+});
+
+export function useActionsContext() {
+	return useContext(ActionsContext);
+}
+
 export const Route = createRootRoute({
 	component: RootLayout,
 });
@@ -45,6 +78,30 @@ function RootLayout() {
 	const [activeMailboxPath, setActiveMailboxPath] = useState("INBOX");
 	const [draggingUid, setDraggingUid] = useState<number | null>(null);
 	const dropHandlerRef = useRef<(toMailboxPath: string) => void>(() => {});
+
+	const [actions, setActions] = useState<EmailAction[]>([]);
+
+	function addAction(action: EmailAction) {
+		setActions((prev) => {
+			// Deduplicate: same type + same uid + same paths = same action
+			const isDuplicate = prev.some((a) => {
+				if (a.type !== action.type) return false;
+				if (a.type === "move" && action.type === "move") {
+					return (
+						a.uid === action.uid &&
+						a.fromMailboxPath === action.fromMailboxPath &&
+						a.toMailboxPath === action.toMailboxPath
+					);
+				}
+				if (a.type === "delete" && action.type === "delete") {
+					return a.uid === action.uid && a.mailboxPath === action.mailboxPath;
+				}
+				return false;
+			});
+			if (isDuplicate) return prev;
+			return [...prev, action];
+		});
+	}
 
 	const dragContextValue: DragContextValue = {
 		draggingUid,
@@ -59,16 +116,18 @@ function RootLayout() {
 		<TooltipProvider>
 			<MailboxContext value={{ activeMailboxPath, setActiveMailboxPath }}>
 				<DragContext value={dragContextValue}>
-					<SidebarProvider>
-						<MailboxSidebar
-							activeMailboxPath={activeMailboxPath}
-							onSelectMailbox={setActiveMailboxPath}
-						/>
-						<SidebarInset>
-							<Outlet />
-						</SidebarInset>
-					</SidebarProvider>
-					<Toaster />
+					<ActionsContext value={{ actions, addAction }}>
+						<SidebarProvider>
+							<MailboxSidebar
+								activeMailboxPath={activeMailboxPath}
+								onSelectMailbox={setActiveMailboxPath}
+							/>
+							<SidebarInset>
+								<Outlet />
+							</SidebarInset>
+						</SidebarProvider>
+						<Toaster />
+					</ActionsContext>
 				</DragContext>
 			</MailboxContext>
 		</TooltipProvider>
