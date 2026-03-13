@@ -42,14 +42,15 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.6",
 		"@tanstack/react-query-devtools": "^5.91.3",
+		"@tanstack/react-router-devtools": "^1.166.7",
 		"@tanstack/router-plugin": "^1.166.7",
 		"@types/bun": "latest",
 		"@types/react": "^19.2.14",
 		"@types/react-dom": "^19.2.3",
 		"@vitejs/plugin-react": "^6.0.1",
 		"tailwindcss": "^4",
+		"turbo": "^2.8.14",
 		"typescript": "^5.7.2",
-		"vite": "^8.0.0",
-		"turbo": "^2.8.14"
+		"vite": "^8.0.0"
 	}
 }
