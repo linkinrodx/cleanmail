@@ -3,6 +3,8 @@ import {
 	type ColumnDef,
 	flexRender,
 	getCoreRowModel,
+	getSortedRowModel,
+	type SortingState,
 	useReactTable,
 } from "@tanstack/react-table";
 import { RefreshCwIcon } from "lucide-react";
@@ -88,6 +90,9 @@ const columns: ColumnDef<Email>[] = [
 
 function IndexPage() {
 	const [setupOpen, setSetupOpen] = useState(false);
+	const [sorting, setSorting] = useState<SortingState>([
+		{ id: "date", desc: true },
+	]);
 	const { activeMailboxPath } = useMailboxContext();
 
 	const { data: imapConfig, isLoading: configLoading } = useImapConfig();
@@ -105,7 +110,10 @@ function IndexPage() {
 	const table = useReactTable({
 		data: emails,
 		columns,
+		state: { sorting },
+		onSortingChange: setSorting,
 		getCoreRowModel: getCoreRowModel(),
+		getSortedRowModel: getSortedRowModel(),
 	});
 
 	const isLoading = configLoading || emailsLoading;
