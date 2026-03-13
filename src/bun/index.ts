@@ -108,16 +108,21 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 
 					try {
 						const messages = [];
-						for await (const message of client.fetch(
-							{ seq: "*:-20" }, // Take last 20
-							{
-								uid: true,
-								envelope: true,
-								flags: true,
-							},
-							{ uid: false },
-						)) {
-							messages.push(message);
+						const mailbox = client.mailbox;
+						const total = mailbox ? (mailbox.exists ?? 0) : 0;
+						if (total > 0) {
+							const start = Math.max(1, total - 19);
+							for await (const message of client.fetch(
+								{ seq: `${start}:*` }, // Take last 20
+								{
+									uid: true,
+									envelope: true,
+									flags: true,
+								},
+								{ uid: false },
+							)) {
+								messages.push(message);
+							}
 						}
 
 						for (const msg of messages) {
@@ -137,9 +142,7 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 								uid: msg.uid,
 								subject: envelope.subject ?? "(no subject)",
 								from: fromStr,
-								date: envelope.date
-									? envelope.date.toISOString()
-									: new Date().toISOString(),
+								date: envelope.date ? envelope.date.toISOString() : "Unknown",
 								seen: msg.flags?.has("\\Seen") ?? false,
 							});
 						}
