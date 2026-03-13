@@ -4,14 +4,28 @@ import {
 	FileEditIcon,
 	InboxIcon,
 	MailIcon,
+	PlusIcon,
 	SendIcon,
+	ShieldAlertIcon,
 	Trash2Icon,
 	TriangleAlertIcon,
 } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
 	Sidebar,
 	SidebarContent,
+	SidebarFooter,
 	SidebarGroup,
 	SidebarGroupContent,
 	SidebarGroupLabel,
@@ -22,7 +36,7 @@ import {
 	SidebarMenuSkeleton,
 	SidebarRail,
 } from "@/components/ui/sidebar";
-import { useMailboxes } from "@/lib/queries/imap";
+import { useCreateMailbox, useMailboxes } from "@/lib/queries/imap";
 import type { Mailbox } from "../../shared/rpc-types";
 
 // Special-use attribute values per RFC 6154 + common Gmail/IMAP extensions
@@ -46,6 +60,10 @@ const PINNED_PATHS = [
 	"Trash",
 	"Spam",
 	"Junk",
+	"OUTBOX",
+	"Outbox",
+	"QUARANTAINE",
+	"Quarantaine",
 ];
 const PINNED_LABELS: Record<string, string> = {
 	INBOX: "Inbox",
@@ -55,6 +73,10 @@ const PINNED_LABELS: Record<string, string> = {
 	Trash: "Trash",
 	Spam: "Spam",
 	Junk: "Spam",
+	OUTBOX: "Outbox",
+	Outbox: "Outbox",
+	QUARANTAINE: "Quarantaine",
+	Quarantaine: "Quarantaine",
 };
 const PINNED_ICONS: Record<string, LucideIcon> = {
 	INBOX: InboxIcon,
@@ -64,6 +86,10 @@ const PINNED_ICONS: Record<string, LucideIcon> = {
 	Trash: Trash2Icon,
 	Spam: TriangleAlertIcon,
 	Junk: TriangleAlertIcon,
+	OUTBOX: SendIcon,
+	Outbox: SendIcon,
+	QUARANTAINE: ShieldAlertIcon,
+	Quarantaine: ShieldAlertIcon,
 };
 
 function getMailboxIcon(mailbox: Mailbox): LucideIcon {
@@ -103,6 +129,10 @@ const PINNED_ORDER: Record<string, number> = {
 	Trash: 3,
 	Spam: 4,
 	Junk: 4,
+	OUTBOX: 5,
+	Outbox: 5,
+	QUARANTAINE: 6,
+	Quarantaine: 6,
 };
 
 function getPinnedOrder(mailbox: Mailbox): number {
@@ -151,6 +181,10 @@ export function MailboxSidebar({
 	onSelectMailbox,
 }: MailboxSidebarProps) {
 	const { data, isLoading } = useMailboxes();
+	const createMailbox = useCreateMailbox();
+
+	const [dialogOpen, setDialogOpen] = useState(false);
+	const [newMailboxName, setNewMailboxName] = useState("");
 
 	const mailboxes = data?.mailboxes ?? [];
 
@@ -171,57 +205,127 @@ export function MailboxSidebar({
 		.filter((m) => !isPinned(m))
 		.sort((a, b) => getMailboxLabel(a).localeCompare(getMailboxLabel(b)));
 
+	function handleCreateMailbox() {
+		const name = newMailboxName.trim();
+		if (!name) return;
+		createMailbox.mutate(name, {
+			onSuccess: () => {
+				setDialogOpen(false);
+				setNewMailboxName("");
+			},
+		});
+	}
+
 	return (
-		<Sidebar collapsible="icon">
-			<SidebarContent>
-				{/* Pinned / important mailboxes */}
-				<SidebarGroup>
-					<SidebarGroupContent>
-						<SidebarMenu>
-							{isLoading
-								? Array.from({ length: 5 }).map((_, i) => (
-										// biome-ignore lint/suspicious/noArrayIndexKey: skeleton list
-										<SidebarMenuItem key={i}>
-											<SidebarMenuSkeleton showIcon />
-										</SidebarMenuItem>
-									))
-								: uniquePinned.map((mailbox) => (
-										<MailboxItem
-											key={mailbox.path}
-											mailbox={mailbox}
-											activeMailboxPath={activeMailboxPath}
-											onSelect={onSelectMailbox}
-										/>
-									))}
-						</SidebarMenu>
-					</SidebarGroupContent>
-				</SidebarGroup>
+		<>
+			<Sidebar collapsible="icon">
+				<SidebarContent>
+					{/* Pinned / important mailboxes */}
+					<SidebarGroup>
+						<SidebarGroupContent>
+							<SidebarMenu>
+								{isLoading
+									? Array.from({ length: 5 }).map((_, i) => (
+											// biome-ignore lint/suspicious/noArrayIndexKey: skeleton list
+											<SidebarMenuItem key={i}>
+												<SidebarMenuSkeleton showIcon />
+											</SidebarMenuItem>
+										))
+									: uniquePinned.map((mailbox) => (
+											<MailboxItem
+												key={mailbox.path}
+												mailbox={mailbox}
+												activeMailboxPath={activeMailboxPath}
+												onSelect={onSelectMailbox}
+											/>
+										))}
+							</SidebarMenu>
+						</SidebarGroupContent>
+					</SidebarGroup>
 
-				{/* Separator between pinned and the rest */}
-				{!isLoading && rest.length > 0 && (
-					<>
-						<Separator className="mx-2 w-auto" />
+					{/* Separator between pinned and the rest */}
+					{!isLoading && rest.length > 0 && (
+						<>
+							<Separator className="mx-2 w-auto" />
 
-						<SidebarGroup>
-							<SidebarGroupLabel>All Mailboxes</SidebarGroupLabel>
-							<SidebarGroupContent>
-								<SidebarMenu>
-									{rest.map((mailbox) => (
-										<MailboxItem
-											key={mailbox.path}
-											mailbox={mailbox}
-											activeMailboxPath={activeMailboxPath}
-											onSelect={onSelectMailbox}
-										/>
-									))}
-								</SidebarMenu>
-							</SidebarGroupContent>
-						</SidebarGroup>
-					</>
-				)}
-			</SidebarContent>
+							<SidebarGroup>
+								<SidebarGroupLabel>All Mailboxes</SidebarGroupLabel>
+								<SidebarGroupContent>
+									<SidebarMenu>
+										{rest.map((mailbox) => (
+											<MailboxItem
+												key={mailbox.path}
+												mailbox={mailbox}
+												activeMailboxPath={activeMailboxPath}
+												onSelect={onSelectMailbox}
+											/>
+										))}
+									</SidebarMenu>
+								</SidebarGroupContent>
+							</SidebarGroup>
+						</>
+					)}
+				</SidebarContent>
 
-			<SidebarRail />
-		</Sidebar>
+				<SidebarFooter>
+					<SidebarMenu>
+						<SidebarMenuItem>
+							<SidebarMenuButton onClick={() => setDialogOpen(true)}>
+								<PlusIcon />
+								<span>New Mailbox</span>
+							</SidebarMenuButton>
+						</SidebarMenuItem>
+					</SidebarMenu>
+				</SidebarFooter>
+
+				<SidebarRail />
+			</Sidebar>
+
+			<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>New Mailbox</DialogTitle>
+					</DialogHeader>
+					<div className="grid gap-2 py-2">
+						<Label htmlFor="mailbox-name">Name</Label>
+						<Input
+							id="mailbox-name"
+							placeholder="e.g. Projects"
+							value={newMailboxName}
+							onChange={(e) => setNewMailboxName(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter") handleCreateMailbox();
+							}}
+							autoFocus
+						/>
+						{createMailbox.error && (
+							<p className="text-sm text-destructive">
+								{createMailbox.error instanceof Error
+									? createMailbox.error.message
+									: "Failed to create mailbox"}
+							</p>
+						)}
+					</div>
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => {
+								setDialogOpen(false);
+								setNewMailboxName("");
+								createMailbox.reset();
+							}}
+						>
+							Cancel
+						</Button>
+						<Button
+							onClick={handleCreateMailbox}
+							disabled={!newMailboxName.trim() || createMailbox.isPending}
+						>
+							{createMailbox.isPending ? "Creating…" : "Create"}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		</>
 	);
 }

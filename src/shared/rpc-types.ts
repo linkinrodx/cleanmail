@@ -47,6 +47,10 @@ export type CleanMailRPC = {
 				params: void;
 				response: { mailboxes: Mailbox[]; error?: string };
 			};
+			createMailbox: {
+				params: { name: string };
+				response: { success: boolean; error?: string };
+			};
 		};
 		messages: Record<never, never>;
 	}>;

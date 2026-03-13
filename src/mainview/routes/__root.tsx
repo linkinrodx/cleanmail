@@ -1,5 +1,4 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { createContext, useContext, useState } from "react";
 import { MailboxSidebar } from "@/components/MailboxSidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -39,7 +38,6 @@ function RootLayout() {
 					</SidebarInset>
 				</SidebarProvider>
 			</MailboxContext>
-			<TanStackRouterDevtools />
 		</TooltipProvider>
 	);
 }

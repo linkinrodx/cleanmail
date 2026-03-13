@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+	createMailbox,
 	fetchEmails,
 	fetchMailboxes,
 	getImapConfig,
@@ -49,5 +50,15 @@ export function useMailboxes() {
 	return useQuery({
 		queryKey: mailboxKeys.all,
 		queryFn: fetchMailboxes,
+	});
+}
+
+export function useCreateMailbox() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (name: string) => createMailbox(name),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
+		},
 	});
 }
