@@ -1,0 +1,49 @@
+{
+	"$schema": "https://turborepo.org/schema.json",
+	"tasks": {
+		"dev": {
+			"persistent": true,
+			"cache": false,
+			"outputs": []
+		},
+		"build": {
+			"dependsOn": ["build:web"],
+			"outputs": ["dist/**", ".next/**"]
+		},
+		"build:web": {
+			"outputs": ["dist/**"]
+		},
+		"format": {
+			"cache": false
+		},
+		"format:watch": {
+			"persistent": true,
+			"cache": false,
+			"outputs": []
+		},
+		"hmr": {
+			"persistent": true,
+			"cache": false,
+			"outputs": []
+		},
+		"lint": {
+			"cache": false
+		},
+		"lint:watch": {
+			"persistent": true,
+			"cache": false,
+			"outputs": []
+		},
+		"start": {
+			"persistent": true,
+			"cache": false,
+			"outputs": []
+		},
+		"start:app": {
+			"dependsOn": ["build:web"],
+			"persistent": true,
+			"cache": false,
+			"outputs": []
+		}
+	}
+}
