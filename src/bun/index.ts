@@ -1,10 +1,11 @@
 import { BrowserView, BrowserWindow, Updater } from "electrobun/bun";
 import { ImapFlow } from "imapflow";
 import keytar from "keytar";
-import type { CleanMailRPC, Email } from "../shared/rpc-types";
+import type { CleanMailRPC, Email, Mailbox } from "../shared/rpc-types";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
+
 const KEYTAR_SERVICE = "cleanmail";
 const KEYTAR_ACCOUNT_CONFIG = "imap-config";
 const KEYTAR_ACCOUNT_PASSWORD = "imap-password";
@@ -67,7 +68,7 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 				}
 			},
 
-			fetchEmails: async () => {
+			fetchEmails: async ({ mailboxPath }) => {
 				const configJson = await keytar.getPassword(
 					KEYTAR_SERVICE,
 					KEYTAR_ACCOUNT_CONFIG,
@@ -102,13 +103,13 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 				try {
 					await client.connect();
 
-					const lock = await client.getMailboxLock("INBOX");
+					const lock = await client.getMailboxLock(mailboxPath);
 					const emails: Email[] = [];
 
 					try {
 						const messages = [];
 						for await (const message of client.fetch(
-							{ seq: "*:*" },
+							{ seq: "*:-20" }, // Take last 20
 							{
 								uid: true,
 								envelope: true,
@@ -119,12 +120,11 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 							messages.push(message);
 						}
 
-						// Take last 20
-						const recent = messages.slice(-20).reverse();
-
-						for (const msg of recent) {
+						for (const msg of messages) {
 							const envelope = msg.envelope;
-							if (!envelope) continue;
+							if (!envelope) {
+								continue;
+							}
 
 							const fromAddress = envelope.from?.[0];
 							const fromStr = fromAddress
@@ -157,6 +157,102 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 					}
 					return {
 						emails: [],
+						error: err instanceof Error ? err.message : String(err),
+					};
+				}
+			},
+
+			fetchMailboxes: async () => {
+				const configJson = await keytar.getPassword(
+					KEYTAR_SERVICE,
+					KEYTAR_ACCOUNT_CONFIG,
+				);
+				const password = await keytar.getPassword(
+					KEYTAR_SERVICE,
+					KEYTAR_ACCOUNT_PASSWORD,
+				);
+
+				if (!configJson || !password) {
+					return { mailboxes: [], error: "IMAP not configured" };
+				}
+
+				let config: { host: string; port: number; username: string };
+				try {
+					config = JSON.parse(configJson);
+				} catch {
+					return { mailboxes: [], error: "Invalid IMAP config" };
+				}
+
+				const client = new ImapFlow({
+					host: config.host,
+					port: config.port,
+					secure: config.port === 993,
+					auth: {
+						user: config.username,
+						pass: password,
+					},
+					logger: false,
+				});
+
+				try {
+					await client.connect();
+
+					const mailboxes: Mailbox[] = [];
+
+					// List all mailboxes recursively
+					const tree = await client.listTree();
+
+					// Flatten the tree into a list of mailboxes
+					const flattenTree = (
+						folders: typeof tree.folders | undefined,
+						delimiter: string,
+					) => {
+						if (!folders) return;
+						for (const folder of folders) {
+							if (!folder.listed) continue;
+							if (!folder.path || !folder.name) continue;
+
+							mailboxes.push({
+								path: folder.path,
+								name: folder.name,
+								delimiter,
+								flags: [...(folder.flags ?? [])],
+								specialUse: folder.specialUse ?? undefined,
+								unreadCount: 0, // Will be populated below
+							});
+
+							if (folder.folders?.length) {
+								flattenTree(folder.folders, delimiter);
+							}
+						}
+					};
+
+					flattenTree(tree.folders, tree.delimiter ?? "/");
+
+					// Fetch unread counts for each mailbox
+					await Promise.all(
+						mailboxes.map(async (mailbox) => {
+							try {
+								const status = await client.status(mailbox.path, {
+									unseen: true,
+								});
+								mailbox.unreadCount = status.unseen ?? 0;
+							} catch {
+								// Skip mailboxes that can't be queried
+							}
+						}),
+					);
+
+					await client.logout();
+					return { mailboxes };
+				} catch (err) {
+					try {
+						await client.logout();
+					} catch {
+						// ignore logout errors
+					}
+					return {
+						mailboxes: [],
 						error: err instanceof Error ? err.message : String(err),
 					};
 				}

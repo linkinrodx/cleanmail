@@ -17,4 +17,6 @@ export const saveImapConfig = (params: {
 	username: string;
 	password: string;
 }) => rpc.request.saveImapConfig(params);
-export const fetchEmails = () => rpc.request.fetchEmails();
+export const fetchEmails = (mailboxPath: string) =>
+	rpc.request.fetchEmails({ mailboxPath });
+export const fetchMailboxes = () => rpc.request.fetchMailboxes();

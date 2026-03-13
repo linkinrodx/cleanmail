@@ -14,6 +14,15 @@ export type Email = {
 	seen: boolean;
 };
 
+export type Mailbox = {
+	path: string;
+	name: string;
+	delimiter: string;
+	flags: string[];
+	specialUse?: string;
+	unreadCount: number;
+};
+
 export type CleanMailRPC = {
 	bun: RPCSchema<{
 		requests: {
@@ -31,8 +40,12 @@ export type CleanMailRPC = {
 				response: { success: boolean; error?: string };
 			};
 			fetchEmails: {
-				params: void;
+				params: { mailboxPath: string };
 				response: { emails: Email[]; error?: string };
+			};
+			fetchMailboxes: {
+				params: void;
+				response: { mailboxes: Mailbox[]; error?: string };
 			};
 		};
 		messages: Record<never, never>;

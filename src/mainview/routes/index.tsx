@@ -12,6 +12,7 @@ import {
 	ImapSetupTrigger,
 } from "@/components/ImapSetupDialog";
 import { Button } from "@/components/ui/button";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
 	Table,
 	TableBody,
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { useEmails, useImapConfig } from "@/lib/queries/imap";
 import type { Email } from "../../shared/rpc-types";
+import { useMailboxContext } from "./__root";
 
 export const Route = createFileRoute("/")({
 	component: IndexPage,
@@ -86,6 +88,7 @@ const columns: ColumnDef<Email>[] = [
 
 function IndexPage() {
 	const [setupOpen, setSetupOpen] = useState(false);
+	const { activeMailboxPath } = useMailboxContext();
 
 	const { data: imapConfig, isLoading: configLoading } = useImapConfig();
 	const {
@@ -94,7 +97,7 @@ function IndexPage() {
 		isError,
 		error,
 		refetch,
-	} = useEmails();
+	} = useEmails(activeMailboxPath);
 
 	const emails = emailsData?.emails ?? [];
 	const fetchError = emailsData?.error ?? (isError ? String(error) : null);
@@ -108,11 +111,22 @@ function IndexPage() {
 	const isLoading = configLoading || emailsLoading;
 	const isConfigured = !!imapConfig;
 
+	// Display name for the active mailbox
+	const mailboxDisplayName =
+		activeMailboxPath === "INBOX"
+			? "Inbox"
+			: (activeMailboxPath.split(/[./\\]/).pop() ?? activeMailboxPath);
+
 	return (
 		<div className="flex min-h-screen flex-col bg-background">
 			{/* Top bar */}
-			<header className="flex items-center justify-between border-b px-4 py-2">
-				<h1 className="text-sm font-semibold tracking-tight">CleanMail</h1>
+			<header className="flex items-center justify-between border-b px-2 py-2">
+				<div className="flex items-center gap-2">
+					<SidebarTrigger />
+					<h1 className="text-sm font-semibold tracking-tight">
+						{mailboxDisplayName}
+					</h1>
+				</div>
 				<div className="flex items-center gap-1">
 					<Button
 						variant="ghost"
