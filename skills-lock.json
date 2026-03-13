@@ -1,25 +1,25 @@
 {
-  "version": 1,
-  "skills": {
-    "electrobun-best-practices": {
-      "source": "0xbigboss/claude-code",
-      "sourceType": "github",
-      "computedHash": "708f261a16aa01e1b0d7a9a0b904dbe6176e864f424515db4f48707cd11dfdf9"
-    },
-    "frontend-design": {
-      "source": "anthropics/skills",
-      "sourceType": "github",
-      "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
-    },
-    "shadcn": {
-      "source": "shadcn/ui",
-      "sourceType": "github",
-      "computedHash": "1ec42c9b918b315d8e5c6c856b78c3c4725fc93dea30b9b7e9975c69848fcce6"
-    },
-    "turborepo": {
-      "source": "vercel/turborepo",
-      "sourceType": "github",
-      "computedHash": "881f26d4a0370ae3b34c19846e528c68f34b4cab747904db18a82efd45444592"
-    }
-  }
+	"version": 1,
+	"skills": {
+		"electrobun-best-practices": {
+			"source": "0xbigboss/claude-code",
+			"sourceType": "github",
+			"computedHash": "708f261a16aa01e1b0d7a9a0b904dbe6176e864f424515db4f48707cd11dfdf9"
+		},
+		"frontend-design": {
+			"source": "anthropics/skills",
+			"sourceType": "github",
+			"computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
+		},
+		"shadcn": {
+			"source": "shadcn/ui",
+			"sourceType": "github",
+			"computedHash": "1ec42c9b918b315d8e5c6c856b78c3c4725fc93dea30b9b7e9975c69848fcce6"
+		},
+		"turborepo": {
+			"source": "vercel/turborepo",
+			"sourceType": "github",
+			"computedHash": "881f26d4a0370ae3b34c19846e528c68f34b4cab747904db18a82efd45444592"
+		}
+	}
 }
