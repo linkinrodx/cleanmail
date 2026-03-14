@@ -2,9 +2,11 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 import {
 	ArchiveIcon,
+	CheckIcon,
 	FileEditIcon,
 	FolderInputIcon,
 	InboxIcon,
+	Loader2Icon,
 	MailIcon,
 	MoveRightIcon,
 	PlusIcon,
@@ -42,7 +44,11 @@ import {
 import { useCreateMailbox, useMailboxes } from "@/lib/queries/imap";
 import type { Mailbox } from "../../shared/rpc-types";
 import type { EmailAction } from "../routes/__root";
-import { useActionsContext, useDragContext } from "../routes/__root";
+import {
+	useActionsContext,
+	useApplyActionContext,
+	useDragContext,
+} from "../routes/__root";
 
 // Special-use attribute values per RFC 6154 + common Gmail/IMAP extensions
 const SPECIAL_USE_ICONS: Record<string, LucideIcon> = {
@@ -247,19 +253,34 @@ function getActionIcon(action: EmailAction): LucideIcon {
 type ActionItemProps = {
 	action: EmailAction;
 	currentHref: string;
+	jobId?: string;
 };
 
-function ActionItem({ action, currentHref }: ActionItemProps) {
+function ActionItem({ action, currentHref, jobId }: ActionItemProps) {
 	const href = getActionHref(action);
 	const title = getActionTitle(action);
-	const Icon = getActionIcon(action);
+	const DefaultIcon = getActionIcon(action);
 	const isActive = currentHref === href;
+
+	const { jobs } = useApplyActionContext();
+	const jobState = jobId ? jobs[jobId] : undefined;
+
+	// Decide which icon to show based on job state
+	let StatusIcon: LucideIcon = DefaultIcon;
+	let iconClass: string | undefined;
+	if (jobState?.status === "pending" || jobState?.status === "running") {
+		StatusIcon = Loader2Icon;
+		iconClass = "animate-spin";
+	} else if (jobState?.status === "success") {
+		StatusIcon = CheckIcon;
+		iconClass = "text-green-500";
+	}
 
 	return (
 		<SidebarMenuItem>
 			<SidebarMenuButton isActive={isActive} title={title}>
 				<Link to={href} className="flex items-center gap-2 w-full">
-					<Icon className="shrink-0 size-4" />
+					<StatusIcon className={`shrink-0 size-4 ${iconClass ?? ""}`} />
 					<span className="flex flex-col leading-tight min-w-0">
 						<span className="truncate">{title}</span>
 						<span className="truncate text-xs text-muted-foreground font-normal">
@@ -275,7 +296,7 @@ function ActionItem({ action, currentHref }: ActionItemProps) {
 export function MailboxSidebar() {
 	const { data, isLoading } = useMailboxes();
 	const createMailbox = useCreateMailbox();
-	const { actions } = useActionsContext();
+	const { actions, getCreatedAt } = useActionsContext();
 	const routerState = useRouterState();
 
 	const currentPathname = routerState.location.pathname;
@@ -375,6 +396,7 @@ export function MailboxSidebar() {
 												key={getActionHref(action)}
 												action={action}
 												currentHref={currentPathname}
+												jobId={getCreatedAt(action)}
 											/>
 										))}
 									</SidebarMenu>

@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PersistedAction } from "../../../shared/rpc-types";
-import { addAction, getActions, removeAction } from "../rpc";
+import {
+	addAction,
+	applyDeleteAction,
+	applyMoveAction,
+	getActions,
+	removeAction,
+} from "../rpc";
 
 export const actionKeys = {
 	all: ["actions"] as const,
@@ -38,5 +44,28 @@ export function useRemoveAction() {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: actionKeys.all });
 		},
+	});
+}
+
+/** Enqueues a batch move-all job. Returns immediately after the job is queued. */
+export function useApplyMoveAction() {
+	return useMutation({
+		mutationFn: (params: {
+			jobId: string;
+			authorEmail: string;
+			fromMailboxPath: string;
+			toMailboxPath: string;
+		}) => applyMoveAction(params),
+	});
+}
+
+/** Enqueues a batch delete-all job. Returns immediately after the job is queued. */
+export function useApplyDeleteAction() {
+	return useMutation({
+		mutationFn: (params: {
+			jobId: string;
+			authorEmail: string;
+			mailboxPath: string;
+		}) => applyDeleteAction(params),
 	});
 }

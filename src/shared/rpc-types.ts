@@ -40,6 +40,15 @@ export type Mailbox = {
 	unreadCount: number;
 };
 
+export type ActionJobStatus = "pending" | "running" | "success" | "error";
+
+export type ActionStatusUpdate = {
+	/** Unique job identifier — equals the action's createdAt timestamp */
+	jobId: string;
+	status: ActionJobStatus;
+	error?: string;
+};
+
 export type CleanMailRPC = {
 	bun: RPCSchema<{
 		requests: {
@@ -97,11 +106,42 @@ export type CleanMailRPC = {
 				params: { createdAt: string };
 				response: { success: boolean; error?: string };
 			};
+			/**
+			 * Enqueue a batch move-all job.
+			 * Returns immediately (202-style) — progress is reported via the
+			 * `actionStatusUpdate` webview message.
+			 */
+			applyMoveAction: {
+				params: {
+					/** Unique job id for tracking — use the action's createdAt */
+					jobId: string;
+					authorEmail: string;
+					fromMailboxPath: string;
+					toMailboxPath: string;
+				};
+				response: { queued: boolean; error?: string };
+			};
+			/**
+			 * Enqueue a batch delete-all job.
+			 * Returns immediately (202-style) — progress is reported via the
+			 * `actionStatusUpdate` webview message.
+			 */
+			applyDeleteAction: {
+				params: {
+					jobId: string;
+					authorEmail: string;
+					mailboxPath: string;
+				};
+				response: { queued: boolean; error?: string };
+			};
 		};
 		messages: Record<never, never>;
 	}>;
 	webview: RPCSchema<{
 		requests: Record<never, never>;
-		messages: Record<never, never>;
+		messages: {
+			/** Sent by the bun process when a batch job changes status */
+			actionStatusUpdate: ActionStatusUpdate;
+		};
 	}>;
 };

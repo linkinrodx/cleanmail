@@ -1,11 +1,12 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { createContext, useContext, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { MailboxSidebar } from "@/components/MailboxSidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useActions, useAddAction } from "@/lib/queries/actions";
-import type { PersistedAction } from "../../shared/rpc-types";
+import { addActionStatusListener, removeActionStatusListener } from "@/lib/rpc";
+import type { ActionJobStatus, PersistedAction } from "../../shared/rpc-types";
 
 type DragContextValue = {
 	draggingUid: number | null;
@@ -90,16 +91,42 @@ export function fromPersistedAction(persisted: PersistedAction): EmailAction {
 
 type ActionsContextValue = {
 	actions: EmailAction[];
+	/** Returns the createdAt timestamp for a given action (used as jobId) */
+	getCreatedAt: (action: EmailAction) => string | undefined;
 	addAction: (action: EmailAction) => void;
 };
 
 export const ActionsContext = createContext<ActionsContextValue>({
 	actions: [],
+	getCreatedAt: () => undefined,
 	addAction: () => {},
 });
 
 export function useActionsContext() {
 	return useContext(ActionsContext);
+}
+
+// ---------------------------------------------------------------------------
+// ApplyActionContext — tracks per-job status of "Apply to all" operations
+// ---------------------------------------------------------------------------
+
+export type ApplyJobState = {
+	status: ActionJobStatus;
+	error?: string;
+};
+
+type ApplyActionContextValue = {
+	jobs: Record<string, ApplyJobState>;
+	setJobStatus: (jobId: string, state: ApplyJobState) => void;
+};
+
+export const ApplyActionContext = createContext<ApplyActionContextValue>({
+	jobs: {},
+	setJobStatus: () => {},
+});
+
+export function useApplyActionContext() {
+	return useContext(ApplyActionContext);
 }
 
 export const Route = createRootRoute({
@@ -117,6 +144,27 @@ function RootLayout() {
 	// the legacy EmailAction shape consumed by existing route components.
 	const actions: EmailAction[] = persistedActions.map(fromPersistedAction);
 
+	/** Returns the createdAt for an action, used as the jobId. */
+	function getCreatedAt(action: EmailAction): string | undefined {
+		const match = persistedActions.find((p) => {
+			if (p.action === "MOVE" && action.type === "move") {
+				return (
+					p.data.authorEmail === action.authorEmail &&
+					p.data.fromMailboxPath === action.fromMailboxPath &&
+					p.data.toMailboxPath === action.toMailboxPath
+				);
+			}
+			if (p.action === "DELETE" && action.type === "delete") {
+				return (
+					p.data.authorEmail === action.authorEmail &&
+					p.data.mailboxPath === action.mailboxPath
+				);
+			}
+			return false;
+		});
+		return match?.createdAt;
+	}
+
 	function addAction(action: EmailAction) {
 		persistAddAction(toPersistedAction(action));
 	}
@@ -130,17 +178,47 @@ function RootLayout() {
 		},
 	};
 
+	// ---- Apply-action job status ----
+	const [applyJobs, setApplyJobs] = useState<Record<string, ApplyJobState>>({});
+
+	const applyContextValue: ApplyActionContextValue = {
+		jobs: applyJobs,
+		setJobStatus: (jobId, state) => {
+			setApplyJobs((prev) => ({ ...prev, [jobId]: state }));
+		},
+	};
+
+	// Subscribe to status updates pushed from the bun process
+	useEffect(() => {
+		function onUpdate({
+			jobId,
+			status,
+			error,
+		}: {
+			jobId: string;
+			status: ActionJobStatus;
+			error?: string;
+		}) {
+			setApplyJobs((prev) => ({ ...prev, [jobId]: { status, error } }));
+		}
+
+		addActionStatusListener(onUpdate);
+		return () => removeActionStatusListener(onUpdate);
+	}, []);
+
 	return (
 		<TooltipProvider>
 			<DragContext value={dragContextValue}>
-				<ActionsContext value={{ actions, addAction }}>
-					<SidebarProvider>
-						<MailboxSidebar />
-						<SidebarInset>
-							<Outlet />
-						</SidebarInset>
-					</SidebarProvider>
-					<Toaster />
+				<ActionsContext value={{ actions, getCreatedAt, addAction }}>
+					<ApplyActionContext value={applyContextValue}>
+						<SidebarProvider>
+							<MailboxSidebar />
+							<SidebarInset>
+								<Outlet />
+							</SidebarInset>
+						</SidebarProvider>
+						<Toaster />
+					</ApplyActionContext>
 				</ActionsContext>
 			</DragContext>
 		</TooltipProvider>

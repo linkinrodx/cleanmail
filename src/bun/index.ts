@@ -4,6 +4,7 @@ import { BrowserView, BrowserWindow, Updater } from "electrobun/bun";
 import { ImapFlow } from "imapflow";
 import keytar from "keytar";
 import type {
+	ActionStatusUpdate,
 	CleanMailRPC,
 	Email,
 	Mailbox,
@@ -45,6 +46,162 @@ function getAppDataDir(): string {
 
 const APP_DATA_DIR = getAppDataDir();
 const ACTIONS_FILE = join(APP_DATA_DIR, "actions.json");
+
+// ---------------------------------------------------------------------------
+// Background job queue
+// ---------------------------------------------------------------------------
+
+type ApplyMoveJob = {
+	type: "move";
+	jobId: string;
+	authorEmail: string;
+	fromMailboxPath: string;
+	toMailboxPath: string;
+};
+
+type ApplyDeleteJob = {
+	type: "delete";
+	jobId: string;
+	authorEmail: string;
+	mailboxPath: string;
+};
+
+type ApplyJob = ApplyMoveJob | ApplyDeleteJob;
+
+const jobQueue: ApplyJob[] = [];
+
+/**
+ * Sends an `actionStatusUpdate` message to the webview.
+ * Must be called after `rpc` is fully initialised (see bottom of file).
+ */
+function notifyWebview(update: ActionStatusUpdate) {
+	try {
+		rpc.send.actionStatusUpdate(update);
+	} catch {
+		// webview may not be ready yet — ignore
+	}
+}
+
+async function createImapClient() {
+	const configJson = await keytar.getPassword(
+		KEYTAR_SERVICE,
+		KEYTAR_ACCOUNT_CONFIG,
+	);
+	const password = await keytar.getPassword(
+		KEYTAR_SERVICE,
+		KEYTAR_ACCOUNT_PASSWORD,
+	);
+
+	if (!configJson || !password) {
+		throw new Error("IMAP not configured");
+	}
+
+	let config: { host: string; port: number; username: string };
+	try {
+		config = JSON.parse(configJson);
+	} catch {
+		throw new Error("Invalid IMAP config");
+	}
+
+	return new ImapFlow({
+		host: config.host,
+		port: config.port,
+		secure: config.port === 993,
+		auth: {
+			user: config.username,
+			pass: password,
+		},
+		logger: false,
+	});
+}
+
+async function processJob(job: ApplyJob) {
+	notifyWebview({ jobId: job.jobId, status: "running" });
+
+	let client: ImapFlow | undefined;
+	try {
+		client = await createImapClient();
+		await client.connect();
+
+		if (job.type === "move") {
+			// Find all UIDs from this sender in the source mailbox
+			const lock = await client.getMailboxLock(job.fromMailboxPath);
+			try {
+				const uids = (await client.search(
+					{ from: job.authorEmail },
+					{ uid: true },
+				)) as number[];
+
+				if (uids.length > 0) {
+					await client.messageMove({ uid: uids.join(",") }, job.toMailboxPath, {
+						uid: true,
+					});
+				}
+			} finally {
+				lock.release();
+			}
+		} else {
+			// delete job
+			// Determine trash mailbox (if any) so we respect the trash rule
+			const mailboxList = await client.list();
+			const trashMailbox = mailboxList.find(
+				(m) =>
+					m.specialUse === "\\Trash" ||
+					m.name.toLowerCase() === "trash" ||
+					m.path.toLowerCase() === "trash",
+			);
+			const trashMailboxPath = trashMailbox?.path;
+
+			const alreadyInTrash =
+				trashMailboxPath &&
+				job.mailboxPath.toLowerCase() === trashMailboxPath.toLowerCase();
+
+			const lock = await client.getMailboxLock(job.mailboxPath);
+			try {
+				const uids = (await client.search(
+					{ from: job.authorEmail },
+					{ uid: true },
+				)) as number[];
+
+				if (uids.length > 0) {
+					if (trashMailboxPath && !alreadyInTrash) {
+						await client.messageMove(
+							{ uid: uids.join(",") },
+							trashMailboxPath,
+							{ uid: true },
+						);
+					} else {
+						await client.messageDelete({ uid: uids.join(",") }, { uid: true });
+					}
+				}
+			} finally {
+				lock.release();
+			}
+		}
+
+		await client.logout();
+		notifyWebview({ jobId: job.jobId, status: "success" });
+	} catch (err) {
+		try {
+			await client?.logout();
+		} catch {
+			// ignore
+		}
+		notifyWebview({
+			jobId: job.jobId,
+			status: "error",
+			error: err instanceof Error ? err.message : String(err),
+		});
+	}
+}
+
+// Process one job per second
+setInterval(async () => {
+	if (jobQueue.length > 0) {
+		const job = jobQueue.shift()!;
+		await processJob(job);
+	}
+}, 1000);
 
 async function readActions(): Promise<PersistedAction[]> {
 	try {
@@ -597,6 +754,41 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 						error: err instanceof Error ? err.message : String(err),
 					};
 				}
+			},
+
+			applyMoveAction: async ({
+				jobId,
+				authorEmail,
+				fromMailboxPath,
+				toMailboxPath,
+			}) => {
+				// Check that a job with this id is not already queued/running
+				const alreadyQueued = jobQueue.some((j) => j.jobId === jobId);
+				if (alreadyQueued) {
+					return { queued: false, error: "Job already queued" };
+				}
+				jobQueue.push({
+					type: "move",
+					jobId,
+					authorEmail,
+					fromMailboxPath,
+					toMailboxPath,
+				});
+				return { queued: true };
+			},
+
+			applyDeleteAction: async ({ jobId, authorEmail, mailboxPath }) => {
+				const alreadyQueued = jobQueue.some((j) => j.jobId === jobId);
+				if (alreadyQueued) {
+					return { queued: false, error: "Job already queued" };
+				}
+				jobQueue.push({
+					type: "delete",
+					jobId,
+					authorEmail,
+					mailboxPath,
+				});
+				return { queued: true };
 			},
 		},
 	},

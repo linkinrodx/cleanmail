@@ -1,11 +1,33 @@
 import { Electroview } from "electrobun/view";
-import type { CleanMailRPC, PersistedAction } from "../../shared/rpc-types";
+import type {
+	ActionStatusUpdate,
+	CleanMailRPC,
+	PersistedAction,
+} from "../../shared/rpc-types";
+
+type ActionStatusListener = (update: ActionStatusUpdate) => void;
+
+const actionStatusListeners = new Set<ActionStatusListener>();
+
+export function addActionStatusListener(listener: ActionStatusListener) {
+	actionStatusListeners.add(listener);
+}
+
+export function removeActionStatusListener(listener: ActionStatusListener) {
+	actionStatusListeners.delete(listener);
+}
 
 const rpc = Electroview.defineRPC<CleanMailRPC>({
 	maxRequestTime: 30 * 1000,
 	handlers: {
 		requests: {},
-		messages: {},
+		messages: {
+			actionStatusUpdate: (update) => {
+				for (const listener of actionStatusListeners) {
+					listener(update);
+				}
+			},
+		},
 	},
 });
 
@@ -43,3 +65,16 @@ export const addAction = (action: PersistedAction) =>
 	rpc.request.addAction(action);
 export const removeAction = (createdAt: string) =>
 	rpc.request.removeAction({ createdAt });
+
+export const applyMoveAction = (params: {
+	jobId: string;
+	authorEmail: string;
+	fromMailboxPath: string;
+	toMailboxPath: string;
+}) => rpc.request.applyMoveAction(params);
+
+export const applyDeleteAction = (params: {
+	jobId: string;
+	authorEmail: string;
+	mailboxPath: string;
+}) => rpc.request.applyDeleteAction(params);
