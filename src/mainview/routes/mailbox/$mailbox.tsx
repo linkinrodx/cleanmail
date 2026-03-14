@@ -1,10 +1,12 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { RefreshCwIcon } from "lucide-react";
+import { useEffect } from "react";
 import { EmailsPagination } from "@/components/EmailsPagination";
 import { EmailTable } from "@/components/EmailTable";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { useEmails } from "@/lib/queries/imap";
+import { EMAILS_PER_PAGE, prefetchEmails, useEmails } from "@/lib/queries/imap";
 
 export const Route = createFileRoute("/mailbox/$mailbox")({
 	validateSearch: (search: Record<string, unknown>) => ({
@@ -17,6 +19,7 @@ function MailboxPage() {
 	const { mailbox: encodedMailbox } = Route.useParams();
 	const { page } = Route.useSearch();
 	const navigate = useNavigate({ from: "/mailbox/$mailbox" });
+	const queryClient = useQueryClient();
 	const mailboxPath = decodeURIComponent(encodedMailbox);
 
 	const {
@@ -30,6 +33,20 @@ function MailboxPage() {
 	const emails = emailsData?.emails ?? [];
 	const total = emailsData?.total ?? 0;
 	const fetchError = emailsData?.error ?? (isError ? String(error) : null);
+
+	// Prefetch adjacent pages once we know the total so navigation feels instant
+	useEffect(() => {
+		if (!total) return;
+
+		const totalPages = Math.ceil(total / EMAILS_PER_PAGE);
+
+		if (page > 1) {
+			prefetchEmails(queryClient, mailboxPath, { page: page - 1 });
+		}
+		if (page < totalPages) {
+			prefetchEmails(queryClient, mailboxPath, { page: page + 1 });
+		}
+	}, [queryClient, mailboxPath, page, total]);
 
 	const mailboxDisplayName =
 		mailboxPath === "INBOX"

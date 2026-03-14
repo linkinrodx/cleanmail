@@ -1,5 +1,10 @@
 import { createQueryKeys } from "@lukemorales/query-key-factory";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	type QueryClient,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import {
 	createMailbox,
 	deleteEmail,
@@ -65,6 +70,19 @@ export function useEmails(
 	const { page = 1, itemsPerPage = EMAILS_PER_PAGE, from } = filters;
 	const resolvedFilters = { page, itemsPerPage, from };
 	return useQuery({
+		...emails.byMailbox(mailboxPath)._ctx.filtered(resolvedFilters),
+		queryFn: () => fetchEmails({ mailboxPath, ...resolvedFilters }),
+	});
+}
+
+export function prefetchEmails(
+	queryClient: QueryClient,
+	mailboxPath: string,
+	filters: { page?: number; itemsPerPage?: number; from?: string } = {},
+) {
+	const { page = 1, itemsPerPage = EMAILS_PER_PAGE, from } = filters;
+	const resolvedFilters = { page, itemsPerPage, from };
+	return queryClient.prefetchQuery({
 		...emails.byMailbox(mailboxPath)._ctx.filtered(resolvedFilters),
 		queryFn: () => fetchEmails({ mailboxPath, ...resolvedFilters }),
 	});
