@@ -7,7 +7,9 @@ import {
 	useReactTable,
 } from "@tanstack/react-table";
 import { GripVerticalIcon, Trash2Icon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { EmailDialog } from "@/components/EmailDialog";
 import { Button } from "@/components/ui/button";
 import {
 	Table,
@@ -17,23 +19,28 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { useDeleteEmail, useMailboxes, useMoveEmail } from "@/lib/queries/imap";
 import type { Email } from "../../shared/rpc-types";
+import { useActionsContext, useDragContext } from "../routes/__root";
+
+/** Extract the bare email address from a "Name <addr>" or plain "addr" string */
+function extractEmailAddress(from: string): string {
+	const match = from.match(/<([^>]+)>/);
+	return match ? match[1].trim() : from.trim();
+}
 
 type EmailTableProps = {
 	emails: Email[];
-	/** Whether rows are draggable (only used on the main inbox page) */
-	draggable?: boolean;
-	draggingUid?: number | null;
-	onDragStart?: (e: React.DragEvent<HTMLTableRowElement>, uid: number) => void;
-	onDragEnd?: () => void;
-	onDelete?: (uid: number) => void;
-	onRowClick?: (uid: number) => void;
+	mailboxPath: string;
 };
 
-function buildColumns(onDelete?: (uid: number) => void): ColumnDef<Email>[] {
+function buildColumns(
+	withDragHandle: boolean,
+	onDelete?: (uid: number) => void,
+): ColumnDef<Email>[] {
 	const cols: ColumnDef<Email>[] = [];
 
-	if (onDelete !== undefined) {
+	if (withDragHandle) {
 		cols.push({
 			id: "drag-handle",
 			header: "",
@@ -132,20 +139,107 @@ function buildColumns(onDelete?: (uid: number) => void): ColumnDef<Email>[] {
 	return cols;
 }
 
-export function EmailTable({
-	emails,
-	draggable = false,
-	draggingUid = null,
-	onDragStart,
-	onDragEnd,
-	onDelete,
-	onRowClick,
-}: EmailTableProps) {
+export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
 	const [sorting, setSorting] = useState<SortingState>([
 		{ id: "date", desc: true },
 	]);
+	const [selectedUid, setSelectedUid] = useState<number | null>(null);
 
-	const columns = buildColumns(onDelete);
+	const { draggingUid, setDraggingUid, registerDropHandler } = useDragContext();
+	const { addAction } = useActionsContext();
+
+	const { data: mailboxesData } = useMailboxes();
+	const trashMailboxPath = mailboxesData?.mailboxes.find(
+		(m) => m.specialUse === "\\Trash",
+	)?.path;
+
+	const { mutate: deleteEmail } = useDeleteEmail(mailboxPath, trashMailboxPath);
+	const { mutate: moveEmail } = useMoveEmail(mailboxPath);
+
+	// Register the drop handler so the sidebar can trigger a move
+	useEffect(() => {
+		registerDropHandler((toMailboxPath) => {
+			if (draggingUid === null) return;
+			if (toMailboxPath === mailboxPath) return;
+
+			const uid = draggingUid;
+
+			const email = emails.find((e) => e.uid === uid);
+			const authorEmail = email ? extractEmailAddress(email.from) : "";
+
+			const toastId = toast.loading("Moving email…");
+
+			moveEmail(
+				{ uid, toMailboxPath },
+				{
+					onSuccess: (result) => {
+						if (result.success) {
+							toast.success("Email moved", { id: toastId });
+							if (authorEmail) {
+								addAction({
+									type: "move",
+									uid,
+									authorEmail,
+									fromMailboxPath: mailboxPath,
+									toMailboxPath,
+								});
+							}
+						} else {
+							toast.error(result.error ?? "Failed to move email", {
+								id: toastId,
+							});
+						}
+					},
+					onError: (err) => {
+						toast.error(
+							err instanceof Error ? err.message : "Failed to move email",
+							{ id: toastId },
+						);
+					},
+				},
+			);
+		});
+	}, [
+		registerDropHandler,
+		moveEmail,
+		draggingUid,
+		emails,
+		mailboxPath,
+		addAction,
+	]);
+
+	function handleDragStart(
+		e: React.DragEvent<HTMLTableRowElement>,
+		uid: number,
+	) {
+		e.dataTransfer.setData("application/x-cleanmail-email-uid", String(uid));
+		e.dataTransfer.effectAllowed = "move";
+		setDraggingUid(uid);
+	}
+
+	function handleDragEnd() {
+		setDraggingUid(null);
+	}
+
+	function handleDelete(uid: number) {
+		const email = emails.find((e) => e.uid === uid);
+		const authorEmail = email ? extractEmailAddress(email.from) : "";
+
+		deleteEmail(uid, {
+			onSuccess: (result) => {
+				if (result.success && authorEmail) {
+					addAction({
+						type: "delete",
+						uid,
+						authorEmail,
+						mailboxPath,
+					});
+				}
+			},
+		});
+	}
+
+	const columns = buildColumns(true, handleDelete);
 
 	const table = useReactTable({
 		data: emails,
@@ -157,45 +251,56 @@ export function EmailTable({
 	});
 
 	return (
-		<Table>
-			<TableHeader>
-				{table.getHeaderGroups().map((headerGroup) => (
-					<TableRow key={headerGroup.id}>
-						{headerGroup.headers.map((header) => (
-							<TableHead key={header.id} style={{ width: header.getSize() }}>
-								{flexRender(
-									header.column.columnDef.header,
-									header.getContext(),
-								)}
-							</TableHead>
-						))}
-					</TableRow>
-				))}
-			</TableHeader>
-			<TableBody>
-				{table.getRowModel().rows.map((row) => {
-					const uid = row.original.uid;
-					const isDragging = draggingUid === uid;
-					return (
-						<TableRow
-							key={row.id}
-							draggable={draggable}
-							onDragStart={draggable ? (e) => onDragStart?.(e, uid) : undefined}
-							onDragEnd={draggable ? onDragEnd : undefined}
-							onClick={onRowClick ? () => onRowClick(uid) : undefined}
-							className={`group/row ${draggable ? "cursor-grab active:cursor-grabbing" : ""} ${onRowClick ? "cursor-pointer" : ""} transition-opacity ${
-								isDragging ? "opacity-40" : ""
-							}`}
-						>
-							{row.getVisibleCells().map((cell) => (
-								<TableCell key={cell.id}>
-									{flexRender(cell.column.columnDef.cell, cell.getContext())}
-								</TableCell>
+		<>
+			<Table>
+				<TableHeader>
+					{table.getHeaderGroups().map((headerGroup) => (
+						<TableRow key={headerGroup.id}>
+							{headerGroup.headers.map((header) => (
+								<TableHead key={header.id} style={{ width: header.getSize() }}>
+									{flexRender(
+										header.column.columnDef.header,
+										header.getContext(),
+									)}
+								</TableHead>
 							))}
 						</TableRow>
-					);
-				})}
-			</TableBody>
-		</Table>
+					))}
+				</TableHeader>
+				<TableBody>
+					{table.getRowModel().rows.map((row) => {
+						const uid = row.original.uid;
+						const isDragging = draggingUid === uid;
+						return (
+							<TableRow
+								key={row.id}
+								draggable
+								onDragStart={(e) => handleDragStart(e, uid)}
+								onDragEnd={handleDragEnd}
+								onClick={() => setSelectedUid(uid)}
+								className={`group/row cursor-grab active:cursor-grabbing cursor-pointer transition-opacity ${
+									isDragging ? "opacity-40" : ""
+								}`}
+							>
+								{row.getVisibleCells().map((cell) => (
+									<TableCell key={cell.id}>
+										{flexRender(cell.column.columnDef.cell, cell.getContext())}
+									</TableCell>
+								))}
+							</TableRow>
+						);
+					})}
+				</TableBody>
+			</Table>
+
+			<EmailDialog
+				open={selectedUid !== null}
+				onOpenChange={(open) => {
+					if (!open) setSelectedUid(null);
+				}}
+				mailboxPath={mailboxPath}
+				uid={selectedUid}
+			/>
+		</>
 	);
 }
