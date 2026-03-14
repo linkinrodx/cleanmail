@@ -7,6 +7,7 @@ import type {
 	ActionStatusUpdate,
 	CleanMailRPC,
 	Email,
+	EmailDetail,
 	Mailbox,
 	PersistedAction,
 } from "../shared/rpc-types";
@@ -414,6 +415,150 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 					return {
 						emails: [],
 						total: 0,
+						error: err instanceof Error ? err.message : String(err),
+					};
+				}
+			},
+
+			fetchEmailDetail: async ({ mailboxPath, uid }) => {
+				let client: ImapFlow | undefined;
+				try {
+					client = await createImapClient();
+					await client.connect();
+
+					const lock = await client.getMailboxLock(mailboxPath);
+					let email: EmailDetail | null = null;
+
+					try {
+						const msg = await client.fetchOne(
+							String(uid),
+							{ uid: true, envelope: true, flags: true, bodyStructure: true },
+							{ uid: true },
+						);
+
+						if (msg) {
+							const envelope = msg.envelope;
+							if (envelope) {
+								const fromAddress = envelope.from?.[0];
+								const fromStr = fromAddress
+									? fromAddress.name
+										? `${fromAddress.name} <${fromAddress.address}>`
+										: (fromAddress.address ?? "")
+									: "Unknown";
+
+								let htmlBody: string | null = null;
+								let textBody: string | null = null;
+
+								// Find a part by MIME type, recursing into multipart nodes
+								const findPart = (
+									part: NonNullable<typeof msg.bodyStructure>,
+									targetType: string,
+								): NonNullable<typeof msg.bodyStructure> | null => {
+									if (part.type === targetType) return part;
+									if (part.childNodes) {
+										for (const child of part.childNodes) {
+											const found = findPart(child, targetType);
+											if (found) return found;
+										}
+									}
+									return null;
+								};
+
+								// Helper to read a Readable stream into a Buffer
+								const readStream = async (
+									readable: NodeJS.ReadableStream,
+								): Promise<Buffer> => {
+									const chunks: Buffer[] = [];
+									for await (const chunk of readable) {
+										chunks.push(
+											Buffer.isBuffer(chunk)
+												? chunk
+												: Buffer.from(chunk as string),
+										);
+									}
+									return Buffer.concat(chunks);
+								};
+
+								const structure = msg.bodyStructure;
+								const htmlPart = structure
+									? findPart(structure, "text/html")
+									: null;
+								const textPart = structure
+									? findPart(structure, "text/plain")
+									: null;
+
+								if (htmlPart?.part) {
+									try {
+										const dl = await client.download(
+											String(uid),
+											htmlPart.part,
+											{ uid: true },
+										);
+										const buf = await readStream(dl.content);
+										const enc = (htmlPart.parameters?.charset ??
+											dl.meta.charset ??
+											"utf-8") as BufferEncoding;
+										htmlBody = buf.toString(enc);
+									} catch {
+										// fallback: will try text part below
+									}
+								}
+
+								if (textPart?.part) {
+									try {
+										const dl = await client.download(
+											String(uid),
+											textPart.part,
+											{ uid: true },
+										);
+										const buf = await readStream(dl.content);
+										const enc = (textPart.parameters?.charset ??
+											dl.meta.charset ??
+											"utf-8") as BufferEncoding;
+										textBody = buf.toString(enc);
+									} catch {
+										// fallback below
+									}
+								}
+
+								// Final fallback: download full message source
+								if (htmlBody === null && textBody === null) {
+									try {
+										const dl = await client.download(String(uid), undefined, {
+											uid: true,
+										});
+										const buf = await readStream(dl.content);
+										textBody = buf.toString("utf-8");
+									} catch {
+										textBody = null;
+									}
+								}
+
+								email = {
+									uid: msg.uid,
+									subject: envelope.subject ?? "(no subject)",
+									from: fromStr,
+									date: envelope.date ? envelope.date.toISOString() : "Unknown",
+									seen: msg.flags?.has("\\Seen") ?? false,
+									htmlBody,
+									textBody,
+								};
+							}
+						}
+					} finally {
+						lock.release();
+					}
+
+					await client.logout();
+					return { email };
+				} catch (err) {
+					try {
+						await client?.logout();
+					} catch {
+						// ignore logout errors
+					}
+					return {
+						email: null,
 						error: err instanceof Error ? err.message : String(err),
 					};
 				}

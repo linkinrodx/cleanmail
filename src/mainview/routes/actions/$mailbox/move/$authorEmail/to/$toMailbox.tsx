@@ -5,7 +5,7 @@ import {
 	PlayIcon,
 	RefreshCwIcon,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EmailsPagination } from "@/components/EmailsPagination";
 import { EmailTable } from "@/components/EmailTable";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useApplyMoveAction, useRemoveAction } from "@/lib/queries/actions";
 import { useEmails } from "@/lib/queries/imap";
 import { useActionsContext, useApplyActionContext } from "@/routes/__root";
+import { EmailDialog } from "@/components/EmailDialog";
 
 export const Route = createFileRoute(
 	"/actions/$mailbox/move/$authorEmail/to/$toMailbox",
@@ -29,6 +30,8 @@ function MoveActionPage() {
 	const navigate = useNavigate({
 		from: "/actions/$mailbox/move/$authorEmail/to/$toMailbox",
 	});
+
+	const [selectedUid, setSelectedUid] = useState<number | null>(null);
 
 	const fromMailboxPath = decodeURIComponent(mailbox);
 	const toMailboxPath = decodeURIComponent(toMailbox);
@@ -181,7 +184,7 @@ function MoveActionPage() {
 								onPageChange={(p) => navigate({ search: { page: p } })}
 							/>
 						</div>
-						<EmailTable emails={emails} />
+						<EmailTable emails={emails} onRowClick={setSelectedUid} />
 					</>
 				)}
 
@@ -204,6 +207,15 @@ function MoveActionPage() {
 					</div>
 				)}
 			</main>
+
+			<EmailDialog
+				open={selectedUid !== null}
+				onOpenChange={(open) => {
+					if (!open) setSelectedUid(null);
+				}}
+				mailboxPath={fromMailboxPath}
+				uid={selectedUid}
+			/>
 		</div>
 	);
 }

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	createMailbox,
 	deleteEmail,
+	fetchEmailDetail,
 	fetchEmails,
 	fetchMailboxes,
 	getImapConfig,
@@ -20,6 +21,8 @@ export const emailKeys = {
 		path: string,
 		filters: { page?: number; itemsPerPage?: number; from?: string },
 	) => ["emails", path, filters] as const,
+	detail: (mailboxPath: string, uid: number) =>
+		["emails", mailboxPath, "detail", uid] as const,
 };
 
 export const mailboxKeys = {
@@ -117,5 +120,17 @@ export function useMoveEmail(fromMailboxPath: string) {
 			});
 			queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
 		},
+	});
+}
+
+export function useEmailDetail(
+	mailboxPath: string,
+	uid: number | null,
+	enabled = true,
+) {
+	return useQuery({
+		queryKey: emailKeys.detail(mailboxPath, uid ?? 0),
+		queryFn: () => fetchEmailDetail({ mailboxPath, uid: uid! }),
+		enabled: enabled && uid !== null,
 	});
 }

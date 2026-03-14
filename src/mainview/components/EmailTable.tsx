@@ -27,6 +27,7 @@ type EmailTableProps = {
 	onDragStart?: (e: React.DragEvent<HTMLTableRowElement>, uid: number) => void;
 	onDragEnd?: () => void;
 	onDelete?: (uid: number) => void;
+	onRowClick?: (uid: number) => void;
 };
 
 function buildColumns(onDelete?: (uid: number) => void): ColumnDef<Email>[] {
@@ -138,6 +139,7 @@ export function EmailTable({
 	onDragStart,
 	onDragEnd,
 	onDelete,
+	onRowClick,
 }: EmailTableProps) {
 	const [sorting, setSorting] = useState<SortingState>([
 		{ id: "date", desc: true },
@@ -180,7 +182,8 @@ export function EmailTable({
 							draggable={draggable}
 							onDragStart={draggable ? (e) => onDragStart?.(e, uid) : undefined}
 							onDragEnd={draggable ? onDragEnd : undefined}
-							className={`group/row ${draggable ? "cursor-grab active:cursor-grabbing" : ""} transition-opacity ${
+							onClick={onRowClick ? () => onRowClick(uid) : undefined}
+							className={`group/row ${draggable ? "cursor-grab active:cursor-grabbing" : ""} ${onRowClick ? "cursor-pointer" : ""} transition-opacity ${
 								isDragging ? "opacity-40" : ""
 							}`}
 						>

@@ -5,7 +5,7 @@ import {
 	PlayIcon,
 	RefreshCwIcon,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EmailsPagination } from "@/components/EmailsPagination";
 import { EmailTable } from "@/components/EmailTable";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useApplyDeleteAction, useRemoveAction } from "@/lib/queries/actions";
 import { useEmails } from "@/lib/queries/imap";
 import { useActionsContext, useApplyActionContext } from "@/routes/__root";
+import { EmailDialog } from "@/components/EmailDialog";
 
 export const Route = createFileRoute("/actions/$mailbox/delete/$authorEmail")({
 	validateSearch: (search: Record<string, unknown>) => ({
@@ -27,6 +28,8 @@ function DeleteActionPage() {
 	const navigate = useNavigate({
 		from: "/actions/$mailbox/delete/$authorEmail",
 	});
+
+	const [selectedUid, setSelectedUid] = useState<number | null>(null);
 
 	const mailboxPath = decodeURIComponent(mailbox);
 	const decodedAuthorEmail = decodeURIComponent(authorEmail);
@@ -171,7 +174,7 @@ function DeleteActionPage() {
 								onPageChange={(p) => navigate({ search: { page: p } })}
 							/>
 						</div>
-						<EmailTable emails={emails} />
+						<EmailTable emails={emails} onRowClick={setSelectedUid} />
 					</>
 				)}
 
@@ -194,6 +197,15 @@ function DeleteActionPage() {
 					</div>
 				)}
 			</main>
+
+			<EmailDialog
+				open={selectedUid !== null}
+				onOpenChange={(open) => {
+					if (!open) setSelectedUid(null);
+				}}
+				mailboxPath={mailboxPath}
+				uid={selectedUid}
+			/>
 		</div>
 	);
 }

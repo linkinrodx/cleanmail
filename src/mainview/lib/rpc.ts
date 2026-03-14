@@ -78,3 +78,8 @@ export const applyDeleteAction = (params: {
 	authorEmail: string;
 	mailboxPath: string;
 }) => rpc.request.applyDeleteAction(params);
+
+export const fetchEmailDetail = (params: {
+	mailboxPath: string;
+	uid: number;
+}) => rpc.request.fetchEmailDetail(params);

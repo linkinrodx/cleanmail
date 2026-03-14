@@ -10,6 +10,7 @@ import {
 import { GripVerticalIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { EmailDialog } from "@/components/EmailDialog";
 import { EmailsPagination } from "@/components/EmailsPagination";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -144,6 +145,7 @@ function MailboxPage() {
 	const [sorting, setSorting] = useState<SortingState>([
 		{ id: "date", desc: true },
 	]);
+	const [selectedUid, setSelectedUid] = useState<number | null>(null);
 	const { draggingUid, setDraggingUid, registerDropHandler } = useDragContext();
 	const { addAction } = useActionsContext();
 
@@ -347,7 +349,8 @@ function MailboxPage() {
 											draggable
 											onDragStart={(e) => handleDragStart(e, uid)}
 											onDragEnd={handleDragEnd}
-											className={`group/row cursor-grab active:cursor-grabbing transition-opacity ${
+											onClick={() => setSelectedUid(uid)}
+											className={`group/row cursor-grab active:cursor-grabbing cursor-pointer transition-opacity ${
 												isDragging ? "opacity-40" : ""
 											}`}
 										>
@@ -367,6 +370,15 @@ function MailboxPage() {
 					</>
 				)}
 			</main>
+
+			<EmailDialog
+				open={selectedUid !== null}
+				onOpenChange={(open) => {
+					if (!open) setSelectedUid(null);
+				}}
+				mailboxPath={mailboxPath}
+				uid={selectedUid}
+			/>
 		</div>
 	);
 }

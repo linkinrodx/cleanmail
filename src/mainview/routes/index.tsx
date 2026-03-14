@@ -10,6 +10,7 @@ import {
 import { GripVerticalIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { EmailDialog } from "@/components/EmailDialog";
 import { EmailsPagination } from "@/components/EmailsPagination";
 import {
 	ImapSetupDialog,
@@ -146,6 +147,7 @@ function IndexPage() {
 	const navigate = useNavigate({ from: "/" });
 
 	const [setupOpen, setSetupOpen] = useState(false);
+	const [selectedUid, setSelectedUid] = useState<number | null>(null);
 	const [sorting, setSorting] = useState<SortingState>([
 		{ id: "date", desc: true },
 	]);
@@ -359,7 +361,8 @@ function IndexPage() {
 											draggable
 											onDragStart={(e) => handleDragStart(e, uid)}
 											onDragEnd={handleDragEnd}
-											className={`group/row cursor-grab active:cursor-grabbing transition-opacity ${
+											onClick={() => setSelectedUid(uid)}
+											className={`group/row cursor-grab active:cursor-grabbing cursor-pointer transition-opacity ${
 												isDragging ? "opacity-40" : ""
 											}`}
 										>
@@ -380,6 +383,14 @@ function IndexPage() {
 				)}
 			</main>
 
+			<EmailDialog
+				open={selectedUid !== null}
+				onOpenChange={(open) => {
+					if (!open) setSelectedUid(null);
+				}}
+				mailboxPath={activeMailboxPath}
+				uid={selectedUid}
+			/>
 			<ImapSetupDialog open={setupOpen} onOpenChange={setSetupOpen} />
 		</div>
 	);

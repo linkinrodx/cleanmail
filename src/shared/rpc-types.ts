@@ -31,6 +31,18 @@ export type Email = {
 	seen: boolean;
 };
 
+export type EmailDetail = {
+	uid: number;
+	subject: string;
+	from: string;
+	date: string;
+	seen: boolean;
+	/** HTML body if the email has an HTML part, otherwise null */
+	htmlBody: string | null;
+	/** Plain-text body */
+	textBody: string | null;
+};
+
 export type Mailbox = {
 	path: string;
 	name: string;
@@ -73,6 +85,10 @@ export type CleanMailRPC = {
 					from?: string;
 				};
 				response: { emails: Email[]; total: number; error?: string };
+			};
+			fetchEmailDetail: {
+				params: { mailboxPath: string; uid: number };
+				response: { email: EmailDetail | null; error?: string };
 			};
 			fetchMailboxes: {
 				params: void;
