@@ -1,3 +1,4 @@
+import { createQueryKeys } from "@lukemorales/query-key-factory";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	createMailbox,
@@ -10,28 +11,35 @@ import {
 	saveImapConfig,
 } from "../rpc";
 
-export const imapConfigKeys = {
-	all: ["imap-config"] as const,
-};
+export const imapConfig = createQueryKeys("imap-config", {
+	all: null,
+});
 
-export const emailKeys = {
-	all: ["emails"] as const,
-	byMailbox: (path: string) => ["emails", path] as const,
-	byMailboxFiltered: (
-		path: string,
-		filters: { page?: number; itemsPerPage?: number; from?: string },
-	) => ["emails", path, filters] as const,
-	detail: (mailboxPath: string, uid: number) =>
-		["emails", mailboxPath, "detail", uid] as const,
-};
+export const emails = createQueryKeys("emails", {
+	byMailbox: (path: string) => ({
+		queryKey: [path],
+		contextQueries: {
+			filtered: (filters: {
+				page?: number;
+				itemsPerPage?: number;
+				from?: string;
+			}) => ({
+				queryKey: [filters],
+			}),
+			detail: (uid: number) => ({
+				queryKey: [uid],
+			}),
+		},
+	}),
+});
 
-export const mailboxKeys = {
-	all: ["mailboxes"] as const,
-};
+export const mailboxes = createQueryKeys("mailboxes", {
+	all: null,
+});
 
 export function useImapConfig() {
 	return useQuery({
-		queryKey: imapConfigKeys.all,
+		...imapConfig.all,
 		queryFn: getImapConfig,
 	});
 }
@@ -41,9 +49,9 @@ export function useSaveImapConfig() {
 	return useMutation({
 		mutationFn: saveImapConfig,
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: imapConfigKeys.all });
-			queryClient.invalidateQueries({ queryKey: emailKeys.all });
-			queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
+			queryClient.invalidateQueries({ queryKey: imapConfig._def });
+			queryClient.invalidateQueries({ queryKey: emails._def });
+			queryClient.invalidateQueries({ queryKey: mailboxes._def });
 		},
 	});
 }
@@ -57,14 +65,14 @@ export function useEmails(
 	const { page = 1, itemsPerPage = EMAILS_PER_PAGE, from } = filters;
 	const resolvedFilters = { page, itemsPerPage, from };
 	return useQuery({
-		queryKey: emailKeys.byMailboxFiltered(mailboxPath, resolvedFilters),
+		...emails.byMailbox(mailboxPath)._ctx.filtered(resolvedFilters),
 		queryFn: () => fetchEmails({ mailboxPath, ...resolvedFilters }),
 	});
 }
 
 export function useMailboxes() {
 	return useQuery({
-		queryKey: mailboxKeys.all,
+		...mailboxes.all,
 		queryFn: fetchMailboxes,
 	});
 }
@@ -74,7 +82,7 @@ export function useCreateMailbox() {
 	return useMutation({
 		mutationFn: (name: string) => createMailbox(name),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
+			queryClient.invalidateQueries({ queryKey: mailboxes._def });
 		},
 	});
 }
@@ -86,17 +94,17 @@ export function useDeleteEmail(mailboxPath: string, trashMailboxPath?: string) {
 			deleteEmail(mailboxPath, uid, trashMailboxPath),
 		onSuccess: () => {
 			queryClient.invalidateQueries({
-				queryKey: emailKeys.byMailbox(mailboxPath),
+				queryKey: emails.byMailbox(mailboxPath).queryKey,
 			});
 			if (
 				trashMailboxPath &&
 				trashMailboxPath.toLowerCase() !== mailboxPath.toLowerCase()
 			) {
 				queryClient.invalidateQueries({
-					queryKey: emailKeys.byMailbox(trashMailboxPath),
+					queryKey: emails.byMailbox(trashMailboxPath).queryKey,
 				});
 			}
-			queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
+			queryClient.invalidateQueries({ queryKey: mailboxes._def });
 		},
 	});
 }
@@ -113,12 +121,12 @@ export function useMoveEmail(fromMailboxPath: string) {
 		}) => moveEmail(fromMailboxPath, toMailboxPath, uid),
 		onSuccess: (_data, { toMailboxPath }) => {
 			queryClient.invalidateQueries({
-				queryKey: emailKeys.byMailbox(fromMailboxPath),
+				queryKey: emails.byMailbox(fromMailboxPath).queryKey,
 			});
 			queryClient.invalidateQueries({
-				queryKey: emailKeys.byMailbox(toMailboxPath),
+				queryKey: emails.byMailbox(toMailboxPath).queryKey,
 			});
-			queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
+			queryClient.invalidateQueries({ queryKey: mailboxes._def });
 		},
 	});
 }
@@ -129,7 +137,7 @@ export function useEmailDetail(
 	enabled = true,
 ) {
 	return useQuery({
-		queryKey: emailKeys.detail(mailboxPath, uid ?? 0),
+		...emails.byMailbox(mailboxPath)._ctx.detail(uid ?? 0),
 		queryFn: () => fetchEmailDetail({ mailboxPath, uid: uid! }),
 		enabled: enabled && uid !== null,
 	});

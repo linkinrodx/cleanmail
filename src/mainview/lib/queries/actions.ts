@@ -1,3 +1,4 @@
+import { createQueryKeys } from "@lukemorales/query-key-factory";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PersistedAction } from "../../../shared/rpc-types";
 import {
@@ -8,13 +9,13 @@ import {
 	removeAction,
 } from "../rpc";
 
-export const actionKeys = {
-	all: ["actions"] as const,
-};
+export const actions = createQueryKeys("actions", {
+	all: null,
+});
 
 export function useActions() {
 	return useQuery({
-		queryKey: actionKeys.all,
+		...actions.all,
 		queryFn: async () => {
 			const result = await getActions();
 			// Sort descending by createdAt so the most recent action appears first
@@ -32,7 +33,7 @@ export function useAddAction() {
 	return useMutation({
 		mutationFn: (action: PersistedAction) => addAction(action),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: actionKeys.all });
+			queryClient.invalidateQueries({ queryKey: actions._def });
 		},
 	});
 }
@@ -42,7 +43,7 @@ export function useRemoveAction() {
 	return useMutation({
 		mutationFn: (createdAt: string) => removeAction(createdAt),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: actionKeys.all });
+			queryClient.invalidateQueries({ queryKey: actions._def });
 		},
 	});
 }
