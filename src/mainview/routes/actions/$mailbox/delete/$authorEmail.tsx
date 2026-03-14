@@ -6,6 +6,7 @@ import {
 	RefreshCwIcon,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { EmailsPagination } from "@/components/EmailsPagination";
 import { EmailTable } from "@/components/EmailTable";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -14,12 +15,18 @@ import { useEmails } from "@/lib/queries/imap";
 import { useActionsContext, useApplyActionContext } from "@/routes/__root";
 
 export const Route = createFileRoute("/actions/$mailbox/delete/$authorEmail")({
+	validateSearch: (search: Record<string, unknown>) => ({
+		page: Number(search.page) || 1,
+	}),
 	component: DeleteActionPage,
 });
 
 function DeleteActionPage() {
 	const { mailbox, authorEmail } = Route.useParams();
-	const navigate = useNavigate();
+	const { page } = Route.useSearch();
+	const navigate = useNavigate({
+		from: "/actions/$mailbox/delete/$authorEmail",
+	});
 
 	const mailboxPath = decodeURIComponent(mailbox);
 	const decodedAuthorEmail = decodeURIComponent(authorEmail);
@@ -31,10 +38,12 @@ function DeleteActionPage() {
 
 	const { data, isLoading, isError, error, refetch } = useEmails(mailboxPath, {
 		from: authorEmail,
+		page,
 	});
 
 	const fetchError = data?.error ?? (isError ? String(error) : null);
 	const emails = data?.emails || [];
+	const total = data?.total ?? 0;
 
 	// Look up the jobId (createdAt) for this action
 	const { getCreatedAt } = useActionsContext();
@@ -62,7 +71,7 @@ function DeleteActionPage() {
 			const timer = setTimeout(() => {
 				removeAction.mutate(jobId, {
 					onSuccess: () => {
-						navigate({ to: "/" });
+						navigate({ to: "/", search: { page: 1 } });
 					},
 				});
 			}, 1500);
@@ -101,9 +110,7 @@ function DeleteActionPage() {
 							variant="default"
 							size="sm"
 							onClick={handleApplyAll}
-							disabled={
-								isApplying || isSuccess || emails.length === 0 || isLoading
-							}
+							disabled={isApplying || isSuccess || total === 0 || isLoading}
 							className="gap-1.5"
 						>
 							{isApplying ? (
@@ -153,7 +160,19 @@ function DeleteActionPage() {
 						<p className="text-sm text-muted-foreground">No emails found.</p>
 					</div>
 				) : (
-					<EmailTable emails={emails} />
+					<>
+						<div className="flex items-center justify-between border-b px-4 py-2">
+							<p className="text-sm text-muted-foreground">
+								{total} email{total !== 1 ? "s" : ""}
+							</p>
+							<EmailsPagination
+								page={page}
+								total={total}
+								onPageChange={(p) => navigate({ search: { page: p } })}
+							/>
+						</div>
+						<EmailTable emails={emails} />
+					</>
 				)}
 
 				{/* Loading overlay while the batch job runs */}

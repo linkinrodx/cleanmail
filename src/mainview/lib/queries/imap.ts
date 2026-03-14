@@ -45,13 +45,17 @@ export function useSaveImapConfig() {
 	});
 }
 
+export const EMAILS_PER_PAGE = 20;
+
 export function useEmails(
 	mailboxPath: string,
 	filters: { page?: number; itemsPerPage?: number; from?: string } = {},
 ) {
+	const { page = 1, itemsPerPage = EMAILS_PER_PAGE, from } = filters;
+	const resolvedFilters = { page, itemsPerPage, from };
 	return useQuery({
-		queryKey: emailKeys.byMailboxFiltered(mailboxPath, filters),
-		queryFn: () => fetchEmails({ mailboxPath, ...filters }),
+		queryKey: emailKeys.byMailboxFiltered(mailboxPath, resolvedFilters),
+		queryFn: () => fetchEmails({ mailboxPath, ...resolvedFilters }),
 	});
 }
 

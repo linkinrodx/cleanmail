@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
 	type ColumnDef,
 	flexRender,
@@ -10,6 +10,7 @@ import {
 import { GripVerticalIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { EmailsPagination } from "@/components/EmailsPagination";
 import {
 	ImapSetupDialog,
 	ImapSetupTrigger,
@@ -35,6 +36,9 @@ import type { Email } from "../../shared/rpc-types";
 import { useActionsContext, useDragContext } from "./__root";
 
 export const Route = createFileRoute("/")({
+	validateSearch: (search: Record<string, unknown>) => ({
+		page: Number(search.page) || 1,
+	}),
 	component: IndexPage,
 });
 
@@ -138,6 +142,8 @@ function buildColumns(onDelete: (uid: number) => void): ColumnDef<Email>[] {
 
 function IndexPage() {
 	const activeMailboxPath = "INBOX";
+	const { page } = Route.useSearch();
+	const navigate = useNavigate({ from: "/" });
 
 	const [setupOpen, setSetupOpen] = useState(false);
 	const [sorting, setSorting] = useState<SortingState>([
@@ -157,7 +163,7 @@ function IndexPage() {
 		isError,
 		error,
 		refetch,
-	} = useEmails(activeMailboxPath);
+	} = useEmails(activeMailboxPath, { page });
 	const { mutate: deleteEmail } = useDeleteEmail(
 		activeMailboxPath,
 		trashMailboxPath,
@@ -165,6 +171,7 @@ function IndexPage() {
 	const { mutate: moveEmail } = useMoveEmail(activeMailboxPath);
 
 	const emails = emailsData?.emails ?? [];
+	const total = emailsData?.total ?? 0;
 
 	// Register the drop handler so the sidebar can trigger a move
 	useEffect(() => {
@@ -318,51 +325,58 @@ function IndexPage() {
 						<p className="text-sm text-muted-foreground">No emails found.</p>
 					</div>
 				) : (
-					<Table>
-						<TableHeader>
-							{table.getHeaderGroups().map((headerGroup) => (
-								<TableRow key={headerGroup.id}>
-									{headerGroup.headers.map((header) => (
-										<TableHead
-											key={header.id}
-											style={{ width: header.getSize() }}
-										>
-											{flexRender(
-												header.column.columnDef.header,
-												header.getContext(),
-											)}
-										</TableHead>
-									))}
-								</TableRow>
-							))}
-						</TableHeader>
-						<TableBody>
-							{table.getRowModel().rows.map((row) => {
-								const uid = row.original.uid;
-								const isDragging = draggingUid === uid;
-								return (
-									<TableRow
-										key={row.id}
-										draggable
-										onDragStart={(e) => handleDragStart(e, uid)}
-										onDragEnd={handleDragEnd}
-										className={`group/row cursor-grab active:cursor-grabbing transition-opacity ${
-											isDragging ? "opacity-40" : ""
-										}`}
-									>
-										{row.getVisibleCells().map((cell) => (
-											<TableCell key={cell.id}>
+					<>
+						<EmailsPagination
+							page={page}
+							total={total}
+							onPageChange={(p) => navigate({ search: { page: p } })}
+						/>
+						<Table>
+							<TableHeader>
+								{table.getHeaderGroups().map((headerGroup) => (
+									<TableRow key={headerGroup.id}>
+										{headerGroup.headers.map((header) => (
+											<TableHead
+												key={header.id}
+												style={{ width: header.getSize() }}
+											>
 												{flexRender(
-													cell.column.columnDef.cell,
-													cell.getContext(),
+													header.column.columnDef.header,
+													header.getContext(),
 												)}
-											</TableCell>
+											</TableHead>
 										))}
 									</TableRow>
-								);
-							})}
-						</TableBody>
-					</Table>
+								))}
+							</TableHeader>
+							<TableBody>
+								{table.getRowModel().rows.map((row) => {
+									const uid = row.original.uid;
+									const isDragging = draggingUid === uid;
+									return (
+										<TableRow
+											key={row.id}
+											draggable
+											onDragStart={(e) => handleDragStart(e, uid)}
+											onDragEnd={handleDragEnd}
+											className={`group/row cursor-grab active:cursor-grabbing transition-opacity ${
+												isDragging ? "opacity-40" : ""
+											}`}
+										>
+											{row.getVisibleCells().map((cell) => (
+												<TableCell key={cell.id}>
+													{flexRender(
+														cell.column.columnDef.cell,
+														cell.getContext(),
+													)}
+												</TableCell>
+											))}
+										</TableRow>
+									);
+								})}
+							</TableBody>
+						</Table>
+					</>
 				)}
 			</main>
 
