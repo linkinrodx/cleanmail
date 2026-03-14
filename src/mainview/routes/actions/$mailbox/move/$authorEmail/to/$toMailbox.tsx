@@ -27,23 +27,13 @@ function MoveActionPage() {
 			? "Inbox"
 			: (toMailboxPath.split(/[./\\]/).pop() ?? toMailboxPath);
 
-	const {
-		data: emailsData,
-		isLoading,
-		isError,
-		error,
-		refetch,
-	} = useEmails(fromMailboxPath);
+	const { data, isLoading, isError, error, refetch } = useEmails(
+		fromMailboxPath,
+		{ from: authorEmail },
+	);
 
-	// Filter to only show emails from the specific author
-	const allEmails = emailsData?.emails ?? [];
-	const emails = allEmails.filter((email) => {
-		const addrMatch = email.from.match(/<([^>]+)>/);
-		const addr = addrMatch ? addrMatch[1] : email.from.trim();
-		return addr.toLowerCase() === decodedAuthorEmail.toLowerCase();
-	});
-
-	const fetchError = emailsData?.error ?? (isError ? String(error) : null);
+	const fetchError = data?.error ?? (isError ? String(error) : null);
+	const emails = data?.emails || [];
 
 	return (
 		<div className="flex min-h-screen flex-col bg-background">

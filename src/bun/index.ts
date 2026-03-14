@@ -81,6 +81,7 @@ async function getMainViewUrl(): Promise<string> {
 }
 
 const rpc = BrowserView.defineRPC<CleanMailRPC>({
+	maxRequestTime: 30 * 1000,
 	handlers: {
 		requests: {
 			getImapConfig: async () => {
@@ -121,7 +122,12 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 				}
 			},
 
-			fetchEmails: async ({ mailboxPath }) => {
+			fetchEmails: async ({
+				mailboxPath,
+				page = 1,
+				itemsPerPage = 20,
+				from,
+			}) => {
 				const configJson = await keytar.getPassword(
 					KEYTAR_SERVICE,
 					KEYTAR_ACCOUNT_CONFIG,
@@ -132,14 +138,14 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 				);
 
 				if (!configJson || !password) {
-					return { emails: [], error: "IMAP not configured" };
+					return { emails: [], total: 0, error: "IMAP not configured" };
 				}
 
 				let config: { host: string; port: number; username: string };
 				try {
 					config = JSON.parse(configJson);
 				} catch {
-					return { emails: [], error: "Invalid IMAP config" };
+					return { emails: [], total: 0, error: "Invalid IMAP config" };
 				}
 
 				const client = new ImapFlow({
@@ -158,53 +164,90 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 
 					const lock = await client.getMailboxLock(mailboxPath);
 					const emails: Email[] = [];
+					let matchedTotal = 0;
 
 					try {
-						const messages = [];
 						const mailbox = client.mailbox;
 						const total = mailbox ? (mailbox.exists ?? 0) : 0;
+
 						if (total > 0) {
-							const start = Math.max(1, total - 19);
-							for await (const message of client.fetch(
-								{ seq: `${start}:*` }, // Take last 20
-								{
-									uid: true,
-									envelope: true,
-									flags: true,
-								},
-								{ uid: false },
-							)) {
-								messages.push(message);
+							const offset = (page - 1) * itemsPerPage;
+
+							let fetchRange: { uid: string } | { seq: string } | undefined;
+
+							if (from) {
+								// Use UID SEARCH so the server filters by the From header.
+								// UIDs are returned ascending; reversing gives newest-first order,
+								// then we page-slice before fetching — avoiding building a full
+								// sequence array in memory.
+								const allUids = (await client.search(
+									{ from },
+									{ uid: true },
+								)) as number[];
+								matchedTotal = allUids.length;
+
+								const pageUids = allUids
+									.slice()
+									.reverse()
+									.slice(offset, offset + itemsPerPage);
+
+								if (pageUids.length > 0) {
+									fetchRange = { uid: pageUids.join(",") };
+								}
+							} else {
+								// No filter — compute the seq range arithmetically (no SEARCH needed).
+								// Sequences are 1-based; the newest message has seq = total.
+								matchedTotal = total;
+								const seqEnd = Math.max(1, total - offset);
+								const seqStart = Math.max(1, seqEnd - itemsPerPage + 1);
+								fetchRange = { seq: `${seqStart}:${seqEnd}` };
 							}
-						}
 
-						for (const msg of messages) {
-							const envelope = msg.envelope;
-							if (!envelope) {
-								continue;
+							if (fetchRange !== undefined) {
+								const messages = [];
+								for await (const message of client.fetch(
+									fetchRange,
+									{ uid: true, envelope: true, flags: true },
+									{ uid: "uid" in fetchRange },
+								)) {
+									messages.push(message);
+								}
+
+								for (const msg of messages) {
+									const envelope = msg.envelope;
+									if (!envelope) continue;
+
+									const fromAddress = envelope.from?.[0];
+									const fromStr = fromAddress
+										? fromAddress.name
+											? `${fromAddress.name} <${fromAddress.address}>`
+											: (fromAddress.address ?? "")
+										: "Unknown";
+
+									emails.push({
+										uid: msg.uid,
+										subject: envelope.subject ?? "(no subject)",
+										from: fromStr,
+										date: envelope.date
+											? envelope.date.toISOString()
+											: "Unknown",
+										seen: msg.flags?.has("\\Seen") ?? false,
+									});
+								}
+
+								// Sort newest first (fetch order is not guaranteed)
+								emails.sort(
+									(a, b) =>
+										new Date(b.date).getTime() - new Date(a.date).getTime(),
+								);
 							}
-
-							const fromAddress = envelope.from?.[0];
-							const fromStr = fromAddress
-								? fromAddress.name
-									? `${fromAddress.name} <${fromAddress.address}>`
-									: (fromAddress.address ?? "")
-								: "Unknown";
-
-							emails.push({
-								uid: msg.uid,
-								subject: envelope.subject ?? "(no subject)",
-								from: fromStr,
-								date: envelope.date ? envelope.date.toISOString() : "Unknown",
-								seen: msg.flags?.has("\\Seen") ?? false,
-							});
 						}
 					} finally {
 						lock.release();
 					}
 
 					await client.logout();
-					return { emails };
+					return { emails, total: matchedTotal };
 				} catch (err) {
 					try {
 						await client.logout();
@@ -213,6 +256,7 @@ const rpc = BrowserView.defineRPC<CleanMailRPC>({
 					}
 					return {
 						emails: [],
+						total: 0,
 						error: err instanceof Error ? err.message : String(err),
 					};
 				}

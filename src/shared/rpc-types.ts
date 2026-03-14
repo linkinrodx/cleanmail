@@ -57,8 +57,13 @@ export type CleanMailRPC = {
 				response: { success: boolean; error?: string };
 			};
 			fetchEmails: {
-				params: { mailboxPath: string };
-				response: { emails: Email[]; error?: string };
+				params: {
+					mailboxPath: string;
+					page?: number;
+					itemsPerPage?: number;
+					from?: string;
+				};
+				response: { emails: Email[]; total: number; error?: string };
 			};
 			fetchMailboxes: {
 				params: void;

@@ -2,6 +2,7 @@ import { Electroview } from "electrobun/view";
 import type { CleanMailRPC, PersistedAction } from "../../shared/rpc-types";
 
 const rpc = Electroview.defineRPC<CleanMailRPC>({
+	maxRequestTime: 30 * 1000,
 	handlers: {
 		requests: {},
 		messages: {},
@@ -17,8 +18,12 @@ export const saveImapConfig = (params: {
 	username: string;
 	password: string;
 }) => rpc.request.saveImapConfig(params);
-export const fetchEmails = (mailboxPath: string) =>
-	rpc.request.fetchEmails({ mailboxPath });
+export const fetchEmails = (params: {
+	mailboxPath: string;
+	page?: number;
+	itemsPerPage?: number;
+	from?: string;
+}) => rpc.request.fetchEmails(params);
 export const fetchMailboxes = () => rpc.request.fetchMailboxes();
 export const createMailbox = (name: string) =>
 	rpc.request.createMailbox({ name });

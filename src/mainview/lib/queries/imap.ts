@@ -16,6 +16,10 @@ export const imapConfigKeys = {
 export const emailKeys = {
 	all: ["emails"] as const,
 	byMailbox: (path: string) => ["emails", path] as const,
+	byMailboxFiltered: (
+		path: string,
+		filters: { page?: number; itemsPerPage?: number; from?: string },
+	) => ["emails", path, filters] as const,
 };
 
 export const mailboxKeys = {
@@ -41,10 +45,13 @@ export function useSaveImapConfig() {
 	});
 }
 
-export function useEmails(mailboxPath: string) {
+export function useEmails(
+	mailboxPath: string,
+	filters: { page?: number; itemsPerPage?: number; from?: string } = {},
+) {
 	return useQuery({
-		queryKey: emailKeys.byMailbox(mailboxPath),
-		queryFn: () => fetchEmails(mailboxPath),
+		queryKey: emailKeys.byMailboxFiltered(mailboxPath, filters),
+		queryFn: () => fetchEmails({ mailboxPath, ...filters }),
 	});
 }
 

@@ -20,23 +20,12 @@ function DeleteActionPage() {
 			? "Inbox"
 			: (mailboxPath.split(/[./\\]/).pop() ?? mailboxPath);
 
-	const {
-		data: emailsData,
-		isLoading,
-		isError,
-		error,
-		refetch,
-	} = useEmails(mailboxPath);
-
-	// Filter to only show emails from the specific author
-	const allEmails = emailsData?.emails ?? [];
-	const emails = allEmails.filter((email) => {
-		const addrMatch = email.from.match(/<([^>]+)>/);
-		const addr = addrMatch ? addrMatch[1] : email.from.trim();
-		return addr.toLowerCase() === decodedAuthorEmail.toLowerCase();
+	const { data, isLoading, isError, error, refetch } = useEmails(mailboxPath, {
+		from: authorEmail,
 	});
 
-	const fetchError = emailsData?.error ?? (isError ? String(error) : null);
+	const fetchError = data?.error ?? (isError ? String(error) : null);
+	const emails = data?.emails || [];
 
 	return (
 		<div className="flex min-h-screen flex-col bg-background">
