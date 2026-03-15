@@ -7,7 +7,7 @@ import {
 	PaginationNext,
 	PaginationPrevious,
 } from "@/components/ui/pagination";
-import { EMAILS_PER_PAGE } from "@/lib/queries/imap";
+import { EMAILS_PER_PAGE } from "@/hooks/queries/useEmails";
 
 type EmailsPaginationProps = {
 	page: number;

@@ -1,16 +1,13 @@
 import {
-	type ColumnDef,
 	flexRender,
 	getCoreRowModel,
 	getSortedRowModel,
 	type SortingState,
 	useReactTable,
 } from "@tanstack/react-table";
-import { GripVerticalIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { EmailDialog } from "@/components/EmailDialog";
-import { Button } from "@/components/ui/button";
 import {
 	Table,
 	TableBody,
@@ -19,9 +16,13 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { useDeleteEmail, useMailboxes, useMoveEmail } from "@/lib/queries/imap";
+import { useActionsContext } from "@/contexts/ActionsContext";
+import { useDragContext } from "@/contexts/DragContext";
+import { useDeleteEmail } from "@/hooks/mutations/useDeleteEmail";
+import { useMoveEmail } from "@/hooks/mutations/useMoveEmail";
+import { useMailboxes } from "@/hooks/queries/useMailboxes";
 import type { Email } from "../../shared/rpc-types";
-import { useActionsContext, useDragContext } from "../routes/__root";
+import { buildColumns } from "./EmailTableColumns";
 
 /** Extract the bare email address from a "Name <addr>" or plain "addr" string */
 function extractEmailAddress(from: string): string {
@@ -33,111 +34,6 @@ type EmailTableProps = {
 	emails: Email[];
 	mailboxPath: string;
 };
-
-function buildColumns(
-	withDragHandle: boolean,
-	onDelete?: (uid: number) => void,
-): ColumnDef<Email>[] {
-	const cols: ColumnDef<Email>[] = [];
-
-	if (withDragHandle) {
-		cols.push({
-			id: "drag-handle",
-			header: "",
-			size: 24,
-			cell: () => (
-				<GripVerticalIcon className="size-3.5 text-muted-foreground/40 group-hover/row:text-muted-foreground/70 transition-colors" />
-			),
-		});
-	}
-
-	cols.push(
-		{
-			id: "status",
-			header: "",
-			size: 8,
-			cell: ({ row }) =>
-				row.original.seen ? null : (
-					<span
-						className="block size-2 rounded-full bg-primary"
-						title="Unread"
-					/>
-				),
-		},
-		{
-			accessorKey: "from",
-			header: "From",
-			cell: ({ getValue }) => (
-				<span className="block max-w-48 truncate">{String(getValue())}</span>
-			),
-		},
-		{
-			accessorKey: "subject",
-			header: "Subject",
-			cell: ({ row, getValue }) => (
-				<span
-					className={
-						row.original.seen ? "text-muted-foreground" : "font-medium"
-					}
-				>
-					{String(getValue())}
-				</span>
-			),
-		},
-		{
-			accessorKey: "date",
-			header: "Date",
-			cell: ({ getValue }) => {
-				const iso = String(getValue());
-				const date = new Date(iso);
-				const now = new Date();
-				const isToday = date.toDateString() === now.toDateString();
-				return (
-					<span className="whitespace-nowrap text-xs text-muted-foreground">
-						{isToday
-							? date.toLocaleTimeString(undefined, {
-									hour: "2-digit",
-									minute: "2-digit",
-								})
-							: date.toLocaleDateString(undefined, {
-									month: "short",
-									day: "numeric",
-									year:
-										date.getFullYear() !== now.getFullYear()
-											? "numeric"
-											: undefined,
-								})}
-					</span>
-				);
-			},
-		},
-	);
-
-	if (onDelete !== undefined) {
-		cols.push({
-			id: "actions",
-			header: "",
-			size: 32,
-			cell: ({ row }) => (
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					title="Delete"
-					onClick={(e) => {
-						e.stopPropagation();
-						onDelete(row.original.uid);
-					}}
-					className="text-muted-foreground hover:text-destructive"
-				>
-					<Trash2Icon data-icon="inline" />
-					<span className="sr-only">Delete</span>
-				</Button>
-			),
-		});
-	}
-
-	return cols;
-}
 
 export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
 	const [sorting, setSorting] = useState<SortingState>([
@@ -158,7 +54,7 @@ export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
 
 	// Register the drop handler so the sidebar can trigger a move
 	useEffect(() => {
-		registerDropHandler((toMailboxPath) => {
+		registerDropHandler((toMailboxPath: string) => {
 			if (draggingUid === null) return;
 			if (toMailboxPath === mailboxPath) return;
 
