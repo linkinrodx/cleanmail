@@ -28,7 +28,7 @@ import { NewMailboxDialog } from "./NewMailboxDialog";
 
 export function MailboxSidebar() {
 	const { data, isLoading } = useMailboxes();
-	const { actions, getCreatedAt } = useActionsContext();
+	const { actions, getId } = useActionsContext();
 	const routerState = useRouterState();
 
 	const currentPathname = routerState.location.pathname;
@@ -116,7 +116,7 @@ export function MailboxSidebar() {
 												key={getActionHref(action)}
 												action={action}
 												currentHref={currentPathname}
-												jobId={getCreatedAt(action)}
+												jobId={getId(action)}
 											/>
 										))}
 									</SidebarMenu>

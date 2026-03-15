@@ -89,10 +89,10 @@ export const rpc = BrowserView.defineRPC<CleanMailRPC>({
 				}
 			},
 
-			removeAction: async ({ createdAt }) => {
+			removeAction: async ({ id }) => {
 				try {
 					const actions = await readActions();
-					const filtered = actions.filter((a) => a.createdAt !== createdAt);
+					const filtered = actions.filter((a) => a.id !== id);
 					await writeActions(filtered);
 					return { success: true };
 				} catch (err) {

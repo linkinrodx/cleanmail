@@ -79,9 +79,9 @@ export function MoveActionPage({
 		}
 	}, [queryClient, fromMailboxPath, authorEmail, page, total]);
 
-	// Look up the jobId (createdAt) for this action
-	const { getCreatedAt } = useActionsContext();
-	const jobId = getCreatedAt({
+	// Look up the jobId for this action
+	const { getId } = useActionsContext();
+	const jobId = getId({
 		type: "move",
 		uid: 0,
 		authorEmail: decodedAuthorEmail,

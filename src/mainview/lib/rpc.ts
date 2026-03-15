@@ -63,8 +63,7 @@ export const moveEmail = (
 export const getActions = () => rpc.request.getActions();
 export const addAction = (action: PersistedAction) =>
 	rpc.request.addAction(action);
-export const removeAction = (createdAt: string) =>
-	rpc.request.removeAction({ createdAt });
+export const removeAction = (id: string) => rpc.request.removeAction({ id });
 
 export const applyMoveAction = (params: {
 	jobId: string;

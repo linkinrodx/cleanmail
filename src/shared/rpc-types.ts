@@ -20,8 +20,8 @@ export type DeleteActionData = {
 };
 
 export type PersistedAction =
-	| { action: "MOVE"; createdAt: string; data: MoveActionData }
-	| { action: "DELETE"; createdAt: string; data: DeleteActionData };
+	| { id: string; action: "MOVE"; createdAt: string; data: MoveActionData }
+	| { id: string; action: "DELETE"; createdAt: string; data: DeleteActionData };
 
 export type Email = {
 	uid: number;
@@ -119,7 +119,7 @@ export type CleanMailRPC = {
 				response: { success: boolean; error?: string };
 			};
 			removeAction: {
-				params: { createdAt: string };
+				params: { id: string };
 				response: { success: boolean; error?: string };
 			};
 			/**
@@ -129,7 +129,7 @@ export type CleanMailRPC = {
 			 */
 			applyMoveAction: {
 				params: {
-					/** Unique job id for tracking — use the action's createdAt */
+					/** Unique job id — matches the action's id */
 					jobId: string;
 					authorEmail: string;
 					fromMailboxPath: string;

@@ -22,10 +22,11 @@ export type DeleteAction = {
 
 export type EmailAction = MoveAction | DeleteAction;
 
-/** Convert a local EmailAction to the persisted format with a timestamp. */
+/** Convert a local EmailAction to the persisted format with a timestamp and unique id. */
 function toPersistedAction(action: EmailAction): PersistedAction {
 	if (action.type === "move") {
 		return {
+			id: crypto.randomUUID(),
 			action: "MOVE",
 			createdAt: new Date().toISOString(),
 			data: {
@@ -37,6 +38,7 @@ function toPersistedAction(action: EmailAction): PersistedAction {
 		};
 	}
 	return {
+		id: crypto.randomUUID(),
 		action: "DELETE",
 		createdAt: new Date().toISOString(),
 		data: {
@@ -68,14 +70,14 @@ export function fromPersistedAction(persisted: PersistedAction): EmailAction {
 
 type ActionsContextValue = {
 	actions: EmailAction[];
-	/** Returns the createdAt timestamp for a given action (used as jobId) */
-	getCreatedAt: (action: EmailAction) => string | undefined;
+	/** Returns the id for a given action (used as jobId) */
+	getId: (action: EmailAction) => string | undefined;
 	addAction: (action: EmailAction) => void;
 };
 
 export const ActionsContext = createContext<ActionsContextValue>({
 	actions: [],
-	getCreatedAt: () => undefined,
+	getId: () => undefined,
 	addAction: () => {},
 });
 
@@ -95,8 +97,8 @@ export function ActionsContextProvider({
 	// the legacy EmailAction shape consumed by existing route components.
 	const actions: EmailAction[] = persistedActions.map(fromPersistedAction);
 
-	/** Returns the createdAt for an action, used as the jobId. */
-	function getCreatedAt(action: EmailAction): string | undefined {
+	/** Returns the id for an action, used as the jobId. */
+	function getId(action: EmailAction): string | undefined {
 		const match = persistedActions.find((p) => {
 			if (p.action === "MOVE" && action.type === "move") {
 				return (
@@ -113,7 +115,7 @@ export function ActionsContextProvider({
 			}
 			return false;
 		});
-		return match?.createdAt;
+		return match?.id;
 	}
 
 	function addAction(action: EmailAction) {
@@ -121,7 +123,7 @@ export function ActionsContextProvider({
 	}
 
 	return (
-		<ActionsContext value={{ actions, getCreatedAt, addAction }}>
+		<ActionsContext value={{ actions, getId, addAction }}>
 			{children}
 		</ActionsContext>
 	);

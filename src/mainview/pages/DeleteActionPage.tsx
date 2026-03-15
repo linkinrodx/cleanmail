@@ -73,9 +73,9 @@ export function DeleteActionPage({
 		}
 	}, [queryClient, mailboxPath, authorEmail, page, total]);
 
-	// Look up the jobId (createdAt) for this action
-	const { getCreatedAt } = useActionsContext();
-	const jobId = getCreatedAt({
+	// Look up the jobId for this action
+	const { getId } = useActionsContext();
+	const jobId = getId({
 		type: "delete",
 		uid: 0,
 		authorEmail: decodedAuthorEmail,

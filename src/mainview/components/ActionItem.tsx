@@ -5,10 +5,23 @@ import {
 	FolderInputIcon,
 	Loader2Icon,
 	MoveRightIcon,
+	PlayIcon,
+	Trash2Icon,
 } from "lucide-react";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import type { EmailAction } from "@/contexts/ActionsContext";
+import { useActionsContext } from "@/contexts/ActionsContext";
 import { useApplyActionContext } from "@/contexts/ApplyActionContext";
+import { useApplyDeleteAction } from "@/hooks/mutations/useApplyDeleteAction";
+import { useApplyMoveAction } from "@/hooks/mutations/useApplyMoveAction";
+import { useRemoveAction } from "@/hooks/mutations/useRemoveAction";
 import { getMailboxShortLabel } from "../lib/mailbox-utils";
 
 export function getActionHref(action: EmailAction): string {
@@ -42,8 +55,13 @@ export function ActionItem({ action, currentHref, jobId }: ActionItemProps) {
 	const DefaultIcon = getActionIcon(action);
 	const isActive = currentHref === href;
 
-	const { jobs } = useApplyActionContext();
+	const { jobs, setJobStatus } = useApplyActionContext();
 	const jobState = jobId ? jobs[jobId] : undefined;
+
+	const { getId } = useActionsContext();
+	const applyMove = useApplyMoveAction();
+	const applyDelete = useApplyDeleteAction();
+	const removeAction = useRemoveAction();
 
 	// Decide which icon to show based on job state
 	let StatusIcon: LucideIcon = DefaultIcon;
@@ -74,31 +92,74 @@ export function ActionItem({ action, currentHref, jobId }: ActionItemProps) {
 			? `${getMailboxShortLabel(action.fromMailboxPath)} → ${getMailboxShortLabel(action.toMailboxPath)}`
 			: getMailboxShortLabel(action.mailboxPath);
 
+	function handleApply() {
+		const resolvedId = getId(action);
+		if (!resolvedId) return;
+
+		setJobStatus(resolvedId, { status: "pending" });
+
+		if (action.type === "move") {
+			applyMove.mutate({
+				jobId: resolvedId,
+				authorEmail: action.authorEmail,
+				fromMailboxPath: action.fromMailboxPath,
+				toMailboxPath: action.toMailboxPath,
+			});
+		} else {
+			applyDelete.mutate({
+				jobId: resolvedId,
+				authorEmail: action.authorEmail,
+				mailboxPath: action.mailboxPath,
+			});
+		}
+	}
+
+	function handleDelete() {
+		const resolvedId = getId(action);
+		if (!resolvedId) return;
+		removeAction.mutate(resolvedId);
+	}
+
 	return (
 		<SidebarMenuItem>
-			<SidebarMenuButton
-				isActive={isActive}
-				title={title}
-				className="h-auto py-0"
-			>
-				<Link to={href} className="flex items-center gap-2.5 w-full py-2.5">
-					<div
-						className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${iconContainerClass}`}
+			<ContextMenu>
+				<ContextMenuTrigger>
+					<SidebarMenuButton
+						isActive={isActive}
+						title={title}
+						className="h-auto py-0"
 					>
-						<StatusIcon className={`size-4 ${iconClass ?? ""}`} />
-					</div>
-					<span className="flex flex-col gap-0.5 leading-none min-w-0">
-						<span className="flex items-center gap-1.5 min-w-0">
-							<span className="truncate text-xs text-muted-foreground">
-								{subtitle}
+						<Link to={href} className="flex items-center gap-2.5 w-full py-2.5">
+							<div
+								className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${iconContainerClass}`}
+							>
+								<StatusIcon className={`size-4 ${iconClass ?? ""}`} />
+							</div>
+							<span className="flex flex-col gap-0.5 leading-none min-w-0">
+								<span className="flex items-center gap-1.5 min-w-0">
+									<span className="truncate text-xs text-muted-foreground">
+										{subtitle}
+									</span>
+								</span>
+								<span className="truncate text-xs font-medium text-foreground/90 pl-0.5">
+									{action.authorEmail}
+								</span>
 							</span>
-						</span>
-						<span className="truncate text-xs font-medium text-foreground/90 pl-0.5">
-							{action.authorEmail}
-						</span>
-					</span>
-				</Link>
-			</SidebarMenuButton>
+						</Link>
+					</SidebarMenuButton>
+				</ContextMenuTrigger>
+				<ContextMenuContent>
+					<ContextMenuItem onClick={handleApply}>
+						<PlayIcon />
+						Apply
+					</ContextMenuItem>
+					<ContextMenuSeparator />
+					<ContextMenuItem variant="destructive" onClick={handleDelete}>
+						<Trash2Icon />
+						Delete
+					</ContextMenuItem>
+				</ContextMenuContent>
+			</ContextMenu>
 		</SidebarMenuItem>
 	);
 }

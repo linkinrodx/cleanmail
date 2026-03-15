@@ -5,7 +5,7 @@ import { removeAction } from "@/lib/rpc";
 export function useRemoveAction() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (createdAt: string) => removeAction(createdAt),
+		mutationFn: (id: string) => removeAction(id),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: actionKeys._def });
 		},
