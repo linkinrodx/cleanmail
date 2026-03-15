@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
 	CheckCircle2Icon,
 	Loader2Icon,
@@ -13,7 +14,11 @@ import { useActionsContext } from "@/contexts/ActionsContext";
 import { useApplyActionContext } from "@/contexts/ApplyActionContext";
 import { useApplyDeleteAction } from "@/hooks/mutations/useApplyDeleteAction";
 import { useRemoveAction } from "@/hooks/mutations/useRemoveAction";
-import { useEmails } from "@/hooks/queries/useEmails";
+import {
+	EMAILS_PER_PAGE,
+	prefetchEmails,
+	useEmails,
+} from "@/hooks/queries/useEmails";
 
 type DeleteActionPageProps = {
 	mailboxPath: string;
@@ -32,6 +37,8 @@ export function DeleteActionPage({
 	onPageChange,
 	onSuccess,
 }: DeleteActionPageProps) {
+	const queryClient = useQueryClient();
+
 	const mailboxLabel =
 		mailboxPath === "INBOX"
 			? "Inbox"
@@ -45,6 +52,26 @@ export function DeleteActionPage({
 	const fetchError = data?.error ?? (isError ? String(error) : null);
 	const emails = data?.emails || [];
 	const total = data?.total ?? 0;
+
+	// Prefetch adjacent pages once we know the total so navigation feels instant
+	useEffect(() => {
+		if (!total) return;
+
+		const totalPages = Math.ceil(total / EMAILS_PER_PAGE);
+
+		if (page > 1) {
+			prefetchEmails(queryClient, mailboxPath, {
+				from: authorEmail,
+				page: page - 1,
+			});
+		}
+		if (page < totalPages) {
+			prefetchEmails(queryClient, mailboxPath, {
+				from: authorEmail,
+				page: page + 1,
+			});
+		}
+	}, [queryClient, mailboxPath, authorEmail, page, total]);
 
 	// Look up the jobId (createdAt) for this action
 	const { getCreatedAt } = useActionsContext();

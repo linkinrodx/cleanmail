@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
 	CheckCircle2Icon,
 	Loader2Icon,
@@ -13,7 +14,11 @@ import { useActionsContext } from "@/contexts/ActionsContext";
 import { useApplyActionContext } from "@/contexts/ApplyActionContext";
 import { useApplyMoveAction } from "@/hooks/mutations/useApplyMoveAction";
 import { useRemoveAction } from "@/hooks/mutations/useRemoveAction";
-import { useEmails } from "@/hooks/queries/useEmails";
+import {
+	EMAILS_PER_PAGE,
+	prefetchEmails,
+	useEmails,
+} from "@/hooks/queries/useEmails";
 
 type MoveActionPageProps = {
 	fromMailboxPath: string;
@@ -34,6 +39,8 @@ export function MoveActionPage({
 	onPageChange,
 	onSuccess,
 }: MoveActionPageProps) {
+	const queryClient = useQueryClient();
+
 	const fromLabel =
 		fromMailboxPath === "INBOX"
 			? "Inbox"
@@ -51,6 +58,26 @@ export function MoveActionPage({
 	const fetchError = data?.error ?? (isError ? String(error) : null);
 	const emails = data?.emails || [];
 	const total = data?.total ?? 0;
+
+	// Prefetch adjacent pages once we know the total so navigation feels instant
+	useEffect(() => {
+		if (!total) return;
+
+		const totalPages = Math.ceil(total / EMAILS_PER_PAGE);
+
+		if (page > 1) {
+			prefetchEmails(queryClient, fromMailboxPath, {
+				from: authorEmail,
+				page: page - 1,
+			});
+		}
+		if (page < totalPages) {
+			prefetchEmails(queryClient, fromMailboxPath, {
+				from: authorEmail,
+				page: page + 1,
+			});
+		}
+	}, [queryClient, fromMailboxPath, authorEmail, page, total]);
 
 	// Look up the jobId (createdAt) for this action
 	const { getCreatedAt } = useActionsContext();
