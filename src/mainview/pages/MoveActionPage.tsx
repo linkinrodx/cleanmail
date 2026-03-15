@@ -126,19 +126,24 @@ export function MoveActionPage({
 	return (
 		<div className="flex min-h-screen flex-col bg-background">
 			{/* Top bar */}
-			<header className="flex items-center justify-between border-b px-2 py-2">
-				<div className="flex items-center gap-2">
-					<SidebarTrigger />
-					<div>
-						<h1 className="text-sm font-semibold tracking-tight">
-							Move from {fromLabel} to {toLabel}
-						</h1>
-						<p className="text-xs text-muted-foreground">
-							{decodedAuthorEmail}
-						</p>
+			<header className="flex items-center justify-between border-b px-3 py-2.5">
+				<div className="flex items-center gap-3 min-w-0">
+					<SidebarTrigger className="shrink-0" />
+					<div className="flex items-center gap-2.5 min-w-0">
+						<span className="shrink-0 rounded-md bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+							Move
+						</span>
+						<div className="min-w-0">
+							<h1 className="truncate text-sm font-semibold tracking-tight">
+								{fromLabel} → {toLabel}
+							</h1>
+							<p className="truncate text-xs text-muted-foreground">
+								{decodedAuthorEmail}
+							</p>
+						</div>
 					</div>
 				</div>
-				<div className="flex items-center gap-1">
+				<div className="flex shrink-0 items-center gap-1.5 pl-3">
 					{jobId && (
 						<Button
 							variant="default"
@@ -195,9 +200,9 @@ export function MoveActionPage({
 					</div>
 				) : (
 					<>
-						<div className="flex items-center justify-between border-b px-4 py-2">
-							<p className="text-sm text-muted-foreground">
-								{total} email{total !== 1 ? "s" : ""}
+						<div className="flex items-center justify-between border-b bg-muted/30 px-4 py-1.5">
+							<p className="text-xs font-medium tabular-nums text-muted-foreground">
+								{total.toLocaleString()} email{total !== 1 ? "s" : ""}
 							</p>
 							<EmailsPagination
 								page={page}
@@ -211,20 +216,26 @@ export function MoveActionPage({
 
 				{/* Loading overlay while the batch job runs */}
 				{isApplying && (
-					<div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm">
-						<Loader2Icon className="size-8 animate-spin text-primary" />
-						<p className="text-sm font-medium">Moving all emails…</p>
-						<p className="text-xs text-muted-foreground">
-							This is running in the background
-						</p>
+					<div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+						<div className="flex flex-col items-center gap-3 rounded-xl border bg-background p-8 shadow-lg">
+							<Loader2Icon className="size-7 animate-spin text-primary" />
+							<div className="text-center">
+								<p className="text-sm font-semibold">Moving all emails…</p>
+								<p className="mt-0.5 text-xs text-muted-foreground">
+									This is running in the background
+								</p>
+							</div>
+						</div>
 					</div>
 				)}
 
 				{/* Success overlay */}
 				{isSuccess && (
-					<div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm">
-						<CheckCircle2Icon className="size-8 text-green-500" />
-						<p className="text-sm font-medium">All emails moved!</p>
+					<div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+						<div className="flex flex-col items-center gap-3 rounded-xl border bg-background p-8 shadow-lg">
+							<CheckCircle2Icon className="size-7 text-green-500" />
+							<p className="text-sm font-semibold">All emails moved!</p>
+						</div>
 					</div>
 				)}
 			</main>
