@@ -1,6 +1,7 @@
 import { BrowserView } from "electrobun/bun";
 import type { CleanMailRPC } from "../shared/rpc-types";
 import {
+	countEmailsFrom,
 	rpcCreateMailbox,
 	rpcDeleteEmail,
 	rpcFetchEmailDetail,
@@ -40,6 +41,22 @@ export const rpc = BrowserView.defineRPC<CleanMailRPC>({
 
 			addAction: async (newAction) => {
 				try {
+					// Only persist the action when at least 1 other email in the
+					// relevant mailbox matches the same sender filter.
+					const mailboxToSearch =
+						newAction.action === "MOVE"
+							? newAction.data.fromMailboxPath
+							: newAction.data.mailboxPath;
+
+					const matchCount = await countEmailsFrom({
+						mailboxPath: mailboxToSearch,
+						authorEmail: newAction.data.authorEmail,
+					});
+
+					if (matchCount < 1) {
+						return { success: true };
+					}
+
 					const actions = await readActions();
 					// Deduplicate by comparing action type + key fields
 					const isDuplicate = actions.some((a) => {

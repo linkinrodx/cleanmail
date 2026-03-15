@@ -570,6 +570,46 @@ export async function rpcMoveEmail({
 	}
 }
 
+/**
+ * Count how many emails in `mailboxPath` were sent from `authorEmail`.
+ * Returns 0 on any error (treat as "no matches").
+ */
+export async function countEmailsFrom({
+	mailboxPath,
+	authorEmail,
+}: {
+	mailboxPath: string;
+	authorEmail: string;
+}): Promise<number> {
+	let client: ImapFlow | undefined;
+	try {
+		client = await createImapClient();
+		await client.connect();
+
+		const lock = await client.getMailboxLock(mailboxPath);
+		let count = 0;
+		try {
+			const uids = (await client.search(
+				{ from: authorEmail },
+				{ uid: true },
+			)) as number[];
+			count = uids.length;
+		} finally {
+			lock.release();
+		}
+
+		await client.logout();
+		return count;
+	} catch {
+		try {
+			await client?.logout();
+		} catch {
+			// ignore logout errors
+		}
+		return 0;
+	}
+}
+
 export async function rpcDeleteEmail({
 	mailboxPath,
 	uid,
