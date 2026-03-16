@@ -26,6 +26,12 @@
 			"cache": false,
 			"outputs": []
 		},
+		"hmr:mock": {
+			"persistent": true,
+			"cache": false,
+			"outputs": [],
+			"passThroughEnv": ["VITE_MOCK"]
+		},
 		"lint": {
 			"cache": false
 		},

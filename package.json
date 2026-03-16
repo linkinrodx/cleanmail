@@ -12,6 +12,7 @@
 		"format:fix": "biome format --write .",
 		"format:watch": "bun --watch scripts/format-watch.ts",
 		"hmr": "vite --port 5173",
+		"hmr:mock": "VITE_MOCK=true vite --port 5173",
 		"lint": "biome lint .",
 		"lint:fix": "biome lint --write .",
 		"lint:watch": "bun --watch scripts/lint-watch.ts",
@@ -43,6 +44,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.6",
+		"@faker-js/faker": "^10.3.0",
 		"@tanstack/react-query-devtools": "^5.91.3",
 		"@tanstack/react-router-devtools": "^1.166.7",
 		"@tanstack/router-plugin": "^1.166.7",
