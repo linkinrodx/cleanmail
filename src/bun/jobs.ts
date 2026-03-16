@@ -137,8 +137,8 @@ export async function processJob(job: ApplyJob) {
 // ---------------------------------------------------------------------------
 
 setInterval(async () => {
-	if (jobQueue.length > 0) {
-		const job = jobQueue.shift()!;
+	const job = jobQueue.shift();
+	if (job) {
 		await processJob(job);
 	}
 }, 1000);
