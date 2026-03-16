@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { emailKeys, mailboxKeys } from "@/lib/query-keys";
+import { emailKeys, mailboxKeys, mutationKeys } from "@/lib/query-keys";
 import { moveEmail } from "@/lib/rpc";
 
 export function useMoveEmail(fromMailboxPath: string) {
 	const queryClient = useQueryClient();
 	return useMutation({
+		mutationKey: mutationKeys.moveEmail(fromMailboxPath),
 		mutationFn: ({
 			uid,
 			toMailboxPath,

@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { emailKeys, mailboxKeys } from "@/lib/query-keys";
+import { emailKeys, mailboxKeys, mutationKeys } from "@/lib/query-keys";
 import { deleteEmail } from "@/lib/rpc";
 
 export function useDeleteEmail(mailboxPath: string, trashMailboxPath?: string) {
 	const queryClient = useQueryClient();
 	return useMutation({
+		mutationKey: mutationKeys.deleteEmail(mailboxPath),
 		mutationFn: (uid: number) =>
 			deleteEmail(mailboxPath, uid, trashMailboxPath),
 		onSuccess: () => {
