@@ -1,3 +1,4 @@
+import type { ImapFlow } from "imapflow";
 import type { ActionStatusUpdate } from "../shared/rpc-types";
 import { createImapClient } from "./imap";
 
@@ -5,7 +6,7 @@ import { createImapClient } from "./imap";
 // Background job types
 // ---------------------------------------------------------------------------
 
-export type ApplyMoveJob = {
+type ApplyMoveJob = {
 	type: "move";
 	jobId: string;
 	authorEmail: string;
@@ -13,14 +14,14 @@ export type ApplyMoveJob = {
 	toMailboxPath: string;
 };
 
-export type ApplyDeleteJob = {
+type ApplyDeleteJob = {
 	type: "delete";
 	jobId: string;
 	authorEmail: string;
 	mailboxPath: string;
 };
 
-export type ApplyJob = ApplyMoveJob | ApplyDeleteJob;
+type ApplyJob = ApplyMoveJob | ApplyDeleteJob;
 
 // ---------------------------------------------------------------------------
 // Job queue
@@ -52,68 +53,77 @@ export function notifyWebview(update: ActionStatusUpdate) {
 // Job processor
 // ---------------------------------------------------------------------------
 
+/**
+ * Find all UIDs from this sender in the source mailbox
+ */
+const processMoveJob = async (client: ImapFlow, job: ApplyMoveJob) => {
+	const lock = await client.getMailboxLock(job.fromMailboxPath);
+	try {
+		const uids = (await client.search(
+			{ from: job.authorEmail },
+			{ uid: true },
+		)) as number[];
+
+		if (uids.length > 0) {
+			await client.messageMove({ uid: uids.join(",") }, job.toMailboxPath, {
+				uid: true,
+			});
+		}
+	} finally {
+		lock.release();
+	}
+};
+
+/**
+ * Determine trash mailbox (if any) so we respect the trash rule
+ */
+const processDeleteJob = async (client: ImapFlow, job: ApplyDeleteJob) => {
+	const mailboxList = await client.list();
+	const trashMailbox = mailboxList.find(
+		(m) =>
+			m.specialUse === "\\Trash" ||
+			m.name.toLowerCase() === "trash" ||
+			m.path.toLowerCase() === "trash",
+	);
+	const trashMailboxPath = trashMailbox?.path;
+
+	const alreadyInTrash =
+		trashMailboxPath &&
+		job.mailboxPath.toLowerCase() === trashMailboxPath.toLowerCase();
+
+	const lock = await client.getMailboxLock(job.mailboxPath);
+	try {
+		const uids = (await client.search(
+			{ from: job.authorEmail },
+			{ uid: true },
+		)) as number[];
+
+		if (uids.length > 0) {
+			if (trashMailboxPath && !alreadyInTrash) {
+				await client.messageMove({ uid: uids.join(",") }, trashMailboxPath, {
+					uid: true,
+				});
+			} else {
+				await client.messageDelete({ uid: uids.join(",") }, { uid: true });
+			}
+		}
+	} finally {
+		lock.release();
+	}
+};
+
 export async function processJob(job: ApplyJob) {
 	notifyWebview({ jobId: job.jobId, status: "running" });
 
-	let client: import("imapflow").ImapFlow | undefined;
+	let client: ImapFlow | undefined;
 	try {
 		client = await createImapClient();
 		await client.connect();
 
 		if (job.type === "move") {
-			// Find all UIDs from this sender in the source mailbox
-			const lock = await client.getMailboxLock(job.fromMailboxPath);
-			try {
-				const uids = (await client.search(
-					{ from: job.authorEmail },
-					{ uid: true },
-				)) as number[];
-
-				if (uids.length > 0) {
-					await client.messageMove({ uid: uids.join(",") }, job.toMailboxPath, {
-						uid: true,
-					});
-				}
-			} finally {
-				lock.release();
-			}
+			await processMoveJob(client, job);
 		} else {
-			// delete job
-			// Determine trash mailbox (if any) so we respect the trash rule
-			const mailboxList = await client.list();
-			const trashMailbox = mailboxList.find(
-				(m) =>
-					m.specialUse === "\\Trash" ||
-					m.name.toLowerCase() === "trash" ||
-					m.path.toLowerCase() === "trash",
-			);
-			const trashMailboxPath = trashMailbox?.path;
-
-			const alreadyInTrash =
-				trashMailboxPath &&
-				job.mailboxPath.toLowerCase() === trashMailboxPath.toLowerCase();
-
-			const lock = await client.getMailboxLock(job.mailboxPath);
-			try {
-				const uids = (await client.search(
-					{ from: job.authorEmail },
-					{ uid: true },
-				)) as number[];
-
-				if (uids.length > 0) {
-					if (trashMailboxPath && !alreadyInTrash) {
-						await client.messageMove(
-							{ uid: uids.join(",") },
-							trashMailboxPath,
-							{ uid: true },
-						);
-					} else {
-						await client.messageDelete({ uid: uids.join(",") }, { uid: true });
-					}
-				}
-			} finally {
-				lock.release();
-			}
+			await processDeleteJob(client, job);
 		}
 
 		await client.logout();
@@ -136,9 +146,17 @@ export async function processJob(job: ApplyJob) {
 // Background interval — process one job per second
 // ---------------------------------------------------------------------------
 
+let jobLock = false; // lock to only process one job simultaneously
+
 setInterval(async () => {
+	if (jobLock) {
+		return;
+	}
+
 	const job = jobQueue.shift();
 	if (job) {
+		jobLock = true;
 		await processJob(job);
+		jobLock = false;
 	}
 }, 1000);

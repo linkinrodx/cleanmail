@@ -7,6 +7,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { useEmailDetail } from "@/hooks/queries/useEmailDetail";
+import { formatDate } from "@/lib/format";
 
 type EmailDialogProps = {
 	open: boolean;
@@ -14,18 +15,6 @@ type EmailDialogProps = {
 	mailboxPath: string;
 	uid: number | null;
 };
-
-function formatDate(iso: string): string {
-	const date = new Date(iso);
-	return date.toLocaleString(undefined, {
-		weekday: "short",
-		year: "numeric",
-		month: "short",
-		day: "numeric",
-		hour: "2-digit",
-		minute: "2-digit",
-	});
-}
 
 export function EmailDialog({
 	open,
@@ -70,28 +59,27 @@ export function EmailDialog({
 						</div>
 					)}
 
-					{isError && (
+					{isError ? (
 						<div className="flex h-40 items-center justify-center text-destructive text-sm">
 							Failed to load email.
 						</div>
-					)}
+					) : null}
 
-					{!isLoading && !isError && email && (
-						<>
-							{email.htmlBody ? (
-								<iframe
-									srcDoc={email.htmlBody}
-									sandbox="allow-same-origin"
-									className="h-full min-h-[40vh] w-full border-none"
-									title="Email content"
-								/>
-							) : (
-								<pre className="whitespace-pre-wrap break-words px-6 py-4 font-sans text-sm leading-relaxed">
-									{email.textBody ?? "(no content)"}
-								</pre>
-							)}
-						</>
-					)}
+					{!isLoading &&
+						!isError &&
+						email &&
+						(email.htmlBody ? (
+							<iframe
+								srcDoc={email.htmlBody}
+								sandbox="allow-same-origin"
+								className="h-full min-h-[40vh] w-full border-none"
+								title="Email content"
+							/>
+						) : (
+							<pre className="whitespace-pre-wrap break-words px-6 py-4 font-sans text-sm leading-relaxed">
+								{email.textBody ?? "(no content)"}
+							</pre>
+						))}
 				</div>
 
 				<DialogFooter showCloseButton className="shrink-0" />

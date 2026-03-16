@@ -35,7 +35,10 @@ export function MailboxItem({ mailbox, currentPathname }: MailboxItemProps) {
 	const isDroppable = draggingUid !== null && !isActive;
 
 	function handleDragOver(e: React.DragEvent<HTMLLIElement>) {
-		if (!isDroppable) return;
+		if (!isDroppable) {
+			return;
+		}
+
 		e.preventDefault();
 		e.dataTransfer.dropEffect = "move";
 		setIsDragOver(true);
@@ -51,7 +54,11 @@ export function MailboxItem({ mailbox, currentPathname }: MailboxItemProps) {
 	function handleDrop(e: React.DragEvent<HTMLLIElement>) {
 		e.preventDefault();
 		setIsDragOver(false);
-		if (!isDroppable) return;
+
+		if (!isDroppable) {
+			return;
+		}
+
 		setDraggingUid(null);
 		onDropToMailbox(mailbox.path);
 	}
@@ -78,9 +85,10 @@ export function MailboxItem({ mailbox, currentPathname }: MailboxItemProps) {
 				<Icon />
 				<span>{label}</span>
 			</SidebarMenuButton>
-			{mailbox.unreadCount > 0 && (
+
+			{mailbox.unreadCount > 0 ? (
 				<SidebarMenuBadge>{mailbox.unreadCount}</SidebarMenuBadge>
-			)}
+			) : null}
 		</SidebarMenuItem>
 	);
 }

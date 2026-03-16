@@ -10,6 +10,7 @@ export function useEmails(
 ) {
 	const { page = 1, itemsPerPage = EMAILS_PER_PAGE, from } = filters;
 	const resolvedFilters = { page, itemsPerPage, from };
+
 	return useQuery({
 		...emailKeys.byMailbox(mailboxPath)._ctx.filtered(resolvedFilters),
 		queryFn: () => fetchEmails({ mailboxPath, ...resolvedFilters }),
@@ -23,6 +24,7 @@ export function prefetchEmails(
 ) {
 	const { page = 1, itemsPerPage = EMAILS_PER_PAGE, from } = filters;
 	const resolvedFilters = { page, itemsPerPage, from };
+
 	return queryClient.prefetchQuery({
 		...emailKeys.byMailbox(mailboxPath)._ctx.filtered(resolvedFilters),
 		queryFn: () => fetchEmails({ mailboxPath, ...resolvedFilters }),

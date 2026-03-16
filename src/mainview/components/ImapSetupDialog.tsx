@@ -1,5 +1,3 @@
-import { Settings2Icon } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -29,6 +27,7 @@ export function ImapSetupDialog({ open, onOpenChange }: ImapSetupDialogProps) {
 						Enter your mail server details to connect your inbox.
 					</DialogDescription>
 				</DialogHeader>
+
 				<ImapSetupForm
 					existingConfig={existingConfig ?? null}
 					onSave={async (values) => {
@@ -39,23 +38,5 @@ export function ImapSetupDialog({ open, onOpenChange }: ImapSetupDialogProps) {
 				/>
 			</DialogContent>
 		</Dialog>
-	);
-}
-
-type ImapSetupTriggerProps = {
-	onOpenChange: (open: boolean) => void;
-};
-
-export function ImapSetupTrigger({ onOpenChange }: ImapSetupTriggerProps) {
-	return (
-		<Button
-			variant="ghost"
-			size="icon-sm"
-			onClick={() => onOpenChange(true)}
-			title="Configure IMAP"
-		>
-			<Settings2Icon data-icon="inline" />
-			<span className="sr-only">Configure IMAP</span>
-		</Button>
 	);
 }

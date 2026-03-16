@@ -114,6 +114,8 @@ export function getPinnedOrder(mailbox: Mailbox): number {
 }
 
 export function getMailboxShortLabel(mailboxPath: string): string {
-	if (mailboxPath === "INBOX") return "Inbox";
+	if (mailboxPath === "INBOX") {
+		return "Inbox";
+	}
 	return mailboxPath.split(/[./\\]/).pop() ?? mailboxPath;
 }

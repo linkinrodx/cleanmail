@@ -5,6 +5,6 @@ import { getImapConfig } from "@/lib/rpc";
 export function useImapConfig() {
 	return useQuery({
 		...imapConfigKeys.all,
-		queryFn: getImapConfig,
+		queryFn: () => getImapConfig(),
 	});
 }

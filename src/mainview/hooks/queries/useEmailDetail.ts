@@ -8,7 +8,9 @@ export function useEmailDetail(
 	enabled = true,
 ) {
 	return useQuery({
-		...emailKeys.byMailbox(mailboxPath)._ctx.detail(uid ?? 0),
+		// biome-ignore lint/style/noNonNullAssertion: possibly null but ignored
+		...emailKeys.byMailbox(mailboxPath)._ctx.detail(uid!),
+		// biome-ignore lint/style/noNonNullAssertion: non null here
 		queryFn: () => fetchEmailDetail({ mailboxPath, uid: uid! }),
 		enabled: enabled && uid !== null,
 	});

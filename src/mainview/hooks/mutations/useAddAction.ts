@@ -5,6 +5,7 @@ import type { PersistedAction } from "../../../shared/rpc-types";
 
 export function useAddAction() {
 	const queryClient = useQueryClient();
+
 	return useMutation({
 		mutationKey: mutationKeys.addAction(),
 		mutationFn: (action: PersistedAction) => addAction(action),

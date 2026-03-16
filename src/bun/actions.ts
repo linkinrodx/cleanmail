@@ -1,4 +1,8 @@
-import type { PersistedAction } from "src/shared/rpc-types";
+import type {
+	ApplyDeleteActionData,
+	ApplyMoveActionData,
+	PersistedAction,
+} from "src/shared/rpc-types";
 import { countEmailsFrom } from "./imap";
 import { jobQueue } from "./jobs";
 import { readActions, writeActions } from "./storage";
@@ -29,33 +33,35 @@ export const rpcAddAction = async (newAction: PersistedAction) => {
 			authorEmail: newAction.data.authorEmail,
 		});
 
-		if (matchCount < 1) {
+		if (matchCount <= 0) {
 			return { success: true };
 		}
 
 		const actions = await readActions();
+
 		// Deduplicate by comparing action type + key fields
 		const isDuplicate = actions.some((a) => {
-			if (a.action !== newAction.action) return false;
 			if (a.action === "MOVE" && newAction.action === "MOVE") {
 				return (
-					a.data.uid === newAction.data.uid &&
+					a.data.authorEmail === newAction.data.authorEmail &&
 					a.data.fromMailboxPath === newAction.data.fromMailboxPath &&
 					a.data.toMailboxPath === newAction.data.toMailboxPath
 				);
 			}
 			if (a.action === "DELETE" && newAction.action === "DELETE") {
 				return (
-					a.data.uid === newAction.data.uid &&
+					a.data.authorEmail === newAction.data.authorEmail &&
 					a.data.mailboxPath === newAction.data.mailboxPath
 				);
 			}
 			return false;
 		});
+
 		if (!isDuplicate) {
 			actions.push(newAction);
 			await writeActions(actions);
 		}
+
 		return { success: true };
 	} catch (err) {
 		return {
@@ -70,6 +76,7 @@ export const rpcRemoveAction = async ({ id }: { id: string }) => {
 		const actions = await readActions();
 		const filtered = actions.filter((a) => a.id !== id);
 		await writeActions(filtered);
+
 		return { success: true };
 	} catch (err) {
 		return {
@@ -79,49 +86,28 @@ export const rpcRemoveAction = async ({ id }: { id: string }) => {
 	}
 };
 
-export const rpcApplyMoveAction = async ({
-	jobId,
-	authorEmail,
-	fromMailboxPath,
-	toMailboxPath,
-}: {
-	jobId: string;
-	authorEmail: string;
-	fromMailboxPath: string;
-	toMailboxPath: string;
-}) => {
-	const alreadyQueued = jobQueue.some((j) => j.jobId === jobId);
+export const rpcApplyMoveAction = async (data: ApplyMoveActionData) => {
+	const alreadyQueued = jobQueue.some((j) => j.jobId === data.jobId);
 	if (alreadyQueued) {
 		return { queued: false, error: "Job already queued" };
 	}
+
 	jobQueue.push({
 		type: "move",
-		jobId,
-		authorEmail,
-		fromMailboxPath,
-		toMailboxPath,
+		...data,
 	});
 	return { queued: true };
 };
 
-export const rpcApplyDeleteAction = async ({
-	jobId,
-	authorEmail,
-	mailboxPath,
-}: {
-	jobId: string;
-	authorEmail: string;
-	mailboxPath: string;
-}) => {
-	const alreadyQueued = jobQueue.some((j) => j.jobId === jobId);
+export const rpcApplyDeleteAction = async (data: ApplyDeleteActionData) => {
+	const alreadyQueued = jobQueue.some((j) => j.jobId === data.jobId);
 	if (alreadyQueued) {
 		return { queued: false, error: "Job already queued" };
 	}
+
 	jobQueue.push({
 		type: "delete",
-		jobId,
-		authorEmail,
-		mailboxPath,
+		...data,
 	});
 	return { queued: true };
 };

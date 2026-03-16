@@ -9,6 +9,7 @@ import { saveImapConfig } from "@/lib/rpc";
 
 export function useSaveImapConfig() {
 	const queryClient = useQueryClient();
+
 	return useMutation({
 		mutationKey: mutationKeys.saveImapConfig(),
 		mutationFn: saveImapConfig,

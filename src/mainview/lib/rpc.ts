@@ -1,9 +1,5 @@
 import { Electroview } from "electrobun/view";
-import type {
-	ActionStatusUpdate,
-	CleanMailRPC,
-	PersistedAction,
-} from "../../shared/rpc-types";
+import type { ActionStatusUpdate, CleanMailRPC } from "../../shared/rpc-types";
 
 type ActionStatusListener = (update: ActionStatusUpdate) => void;
 
@@ -33,52 +29,22 @@ const rpc = Electroview.defineRPC<CleanMailRPC>({
 
 export const electroview = new Electroview({ rpc });
 
-export const getImapConfig = () => rpc.request.getImapConfig();
-export const saveImapConfig = (params: {
-	host: string;
-	port: number;
-	username: string;
-	password: string;
-}) => rpc.request.saveImapConfig(params);
-export const fetchEmails = (params: {
-	mailboxPath: string;
-	page?: number;
-	itemsPerPage?: number;
-	from?: string;
-}) => rpc.request.fetchEmails(params);
-export const fetchMailboxes = () => rpc.request.fetchMailboxes();
+export const getImapConfig = rpc.request.getImapConfig;
+export const saveImapConfig = rpc.request.saveImapConfig;
+
+export const fetchEmails = rpc.request.fetchEmails;
+export const fetchEmailDetail = rpc.request.fetchEmailDetail;
+
+export const fetchMailboxes = rpc.request.fetchMailboxes;
 export const createMailbox = (name: string) =>
 	rpc.request.createMailbox({ name });
-export const deleteEmail = (
-	mailboxPath: string,
-	uid: number,
-	trashMailboxPath?: string,
-) => rpc.request.deleteEmail({ mailboxPath, uid, trashMailboxPath });
-export const moveEmail = (
-	fromMailboxPath: string,
-	toMailboxPath: string,
-	uid: number,
-) => rpc.request.moveEmail({ fromMailboxPath, toMailboxPath, uid });
 
-export const getActions = () => rpc.request.getActions();
-export const addAction = (action: PersistedAction) =>
-	rpc.request.addAction(action);
+export const moveEmail = rpc.request.moveEmail;
+export const deleteEmail = rpc.request.deleteEmail;
+
+export const getActions = rpc.request.getActions;
+export const addAction = rpc.request.addAction;
 export const removeAction = (id: string) => rpc.request.removeAction({ id });
 
-export const applyMoveAction = (params: {
-	jobId: string;
-	authorEmail: string;
-	fromMailboxPath: string;
-	toMailboxPath: string;
-}) => rpc.request.applyMoveAction(params);
-
-export const applyDeleteAction = (params: {
-	jobId: string;
-	authorEmail: string;
-	mailboxPath: string;
-}) => rpc.request.applyDeleteAction(params);
-
-export const fetchEmailDetail = (params: {
-	mailboxPath: string;
-	uid: number;
-}) => rpc.request.fetchEmailDetail(params);
+export const applyMoveAction = rpc.request.applyMoveAction;
+export const applyDeleteAction = rpc.request.applyDeleteAction;

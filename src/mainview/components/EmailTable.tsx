@@ -25,10 +25,10 @@ import type { Email } from "../../shared/rpc-types";
 import { buildColumns } from "./EmailTableColumns";
 
 /** Extract the bare email address from a "Name <addr>" or plain "addr" string */
-function extractEmailAddress(from: string): string {
+const extractEmailAddress = (from: string): string => {
 	const match = from.match(/<([^>]+)>/);
 	return match ? match[1].trim() : from.trim();
-}
+};
 
 type EmailTableProps = {
 	emails: Email[];
@@ -55,8 +55,12 @@ export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
 	// Register the drop handler so the sidebar can trigger a move
 	useEffect(() => {
 		registerDropHandler((toMailboxPath: string) => {
-			if (draggingUid === null) return;
-			if (toMailboxPath === mailboxPath) return;
+			if (draggingUid === null) {
+				return;
+			}
+			if (toMailboxPath === mailboxPath) {
+				return;
+			}
 
 			const uid = draggingUid;
 
@@ -163,10 +167,12 @@ export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
 						</TableRow>
 					))}
 				</TableHeader>
+
 				<TableBody>
 					{table.getRowModel().rows.map((row) => {
 						const uid = row.original.uid;
 						const isDragging = draggingUid === uid;
+
 						return (
 							<TableRow
 								key={row.id}
@@ -192,7 +198,9 @@ export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
 			<EmailDialog
 				open={selectedUid !== null}
 				onOpenChange={(open) => {
-					if (!open) setSelectedUid(null);
+					if (!open) {
+						setSelectedUid(null);
+					}
 				}}
 				mailboxPath={mailboxPath}
 				uid={selectedUid}

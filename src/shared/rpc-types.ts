@@ -6,6 +6,10 @@ export type ImapConfig = {
 	username: string;
 };
 
+export type SaveImapConfigData = ImapConfig & {
+	password: string;
+};
+
 export type MoveActionData = {
 	uid: number;
 	authorEmail: string;
@@ -23,12 +27,24 @@ export type PersistedAction =
 	| { id: string; action: "MOVE"; createdAt: string; data: MoveActionData }
 	| { id: string; action: "DELETE"; createdAt: string; data: DeleteActionData };
 
+export type FetchEmailsData = {
+	mailboxPath: string;
+	page?: number;
+	itemsPerPage?: number;
+	from?: string;
+};
+
 export type Email = {
 	uid: number;
 	subject: string;
 	from: string;
 	date: string;
 	seen: boolean;
+};
+
+export type FetchEmailDetail = {
+	mailboxPath: string;
+	uid: number;
 };
 
 export type EmailDetail = {
@@ -52,6 +68,33 @@ export type Mailbox = {
 	unreadCount: number;
 };
 
+export type MoveEmailData = {
+	fromMailboxPath: string;
+	toMailboxPath: string;
+	uid: number;
+};
+
+export type DeleteEmailData = {
+	mailboxPath: string;
+	uid: number;
+	trashMailboxPath?: string;
+};
+
+export type ApplyMoveActionData = {
+	/** Unique job id — matches the action's id */
+	jobId: string;
+	authorEmail: string;
+	fromMailboxPath: string;
+	toMailboxPath: string;
+};
+
+export type ApplyDeleteActionData = {
+	/** Unique job id — matches the action's id */
+	jobId: string;
+	authorEmail: string;
+	mailboxPath: string;
+};
+
 export type ActionJobStatus = "pending" | "running" | "success" | "error";
 
 export type ActionStatusUpdate = {
@@ -69,25 +112,15 @@ export type CleanMailRPC = {
 				response: ImapConfig | null;
 			};
 			saveImapConfig: {
-				params: {
-					host: string;
-					port: number;
-					username: string;
-					password: string;
-				};
+				params: SaveImapConfigData;
 				response: { success: boolean; error?: string };
 			};
 			fetchEmails: {
-				params: {
-					mailboxPath: string;
-					page?: number;
-					itemsPerPage?: number;
-					from?: string;
-				};
+				params: FetchEmailsData;
 				response: { emails: Email[]; total: number; error?: string };
 			};
 			fetchEmailDetail: {
-				params: { mailboxPath: string; uid: number };
+				params: FetchEmailDetail;
 				response: { email: EmailDetail | null; error?: string };
 			};
 			fetchMailboxes: {
@@ -99,15 +132,11 @@ export type CleanMailRPC = {
 				response: { success: boolean; error?: string };
 			};
 			deleteEmail: {
-				params: {
-					mailboxPath: string;
-					uid: number;
-					trashMailboxPath?: string;
-				};
+				params: DeleteEmailData;
 				response: { success: boolean; error?: string };
 			};
 			moveEmail: {
-				params: { fromMailboxPath: string; toMailboxPath: string; uid: number };
+				params: MoveEmailData;
 				response: { success: boolean; error?: string };
 			};
 			getActions: {
@@ -128,13 +157,7 @@ export type CleanMailRPC = {
 			 * `actionStatusUpdate` webview message.
 			 */
 			applyMoveAction: {
-				params: {
-					/** Unique job id — matches the action's id */
-					jobId: string;
-					authorEmail: string;
-					fromMailboxPath: string;
-					toMailboxPath: string;
-				};
+				params: ApplyMoveActionData;
 				response: { queued: boolean; error?: string };
 			};
 			/**
@@ -143,11 +166,7 @@ export type CleanMailRPC = {
 			 * `actionStatusUpdate` webview message.
 			 */
 			applyDeleteAction: {
-				params: {
-					jobId: string;
-					authorEmail: string;
-					mailboxPath: string;
-				};
+				params: ApplyDeleteActionData;
 				response: { queued: boolean; error?: string };
 			};
 		};

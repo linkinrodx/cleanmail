@@ -25,7 +25,10 @@ export function NewMailboxDialog({
 
 	function handleCreateMailbox() {
 		const name = newMailboxName.trim();
-		if (!name) return;
+		if (!name) {
+			return;
+		}
+
 		createMailbox.mutate(name, {
 			onSuccess: () => {
 				onOpenChange(false);
@@ -46,6 +49,7 @@ export function NewMailboxDialog({
 				<DialogHeader>
 					<DialogTitle>New Mailbox</DialogTitle>
 				</DialogHeader>
+
 				<div className="grid gap-2 py-2">
 					<Label htmlFor="mailbox-name">Name</Label>
 					<Input
@@ -54,7 +58,9 @@ export function NewMailboxDialog({
 						value={newMailboxName}
 						onChange={(e) => setNewMailboxName(e.target.value)}
 						onKeyDown={(e) => {
-							if (e.key === "Enter") handleCreateMailbox();
+							if (e.key === "Enter") {
+								handleCreateMailbox();
+							}
 						}}
 						autoFocus
 					/>
@@ -66,6 +72,7 @@ export function NewMailboxDialog({
 						</p>
 					)}
 				</div>
+
 				<DialogFooter>
 					<Button variant="outline" onClick={handleCancel}>
 						Cancel

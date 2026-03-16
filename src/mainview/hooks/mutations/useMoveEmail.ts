@@ -4,6 +4,7 @@ import { moveEmail } from "@/lib/rpc";
 
 export function useMoveEmail(fromMailboxPath: string) {
 	const queryClient = useQueryClient();
+
 	return useMutation({
 		mutationKey: mutationKeys.moveEmail(fromMailboxPath),
 		mutationFn: ({
@@ -12,7 +13,7 @@ export function useMoveEmail(fromMailboxPath: string) {
 		}: {
 			uid: number;
 			toMailboxPath: string;
-		}) => moveEmail(fromMailboxPath, toMailboxPath, uid),
+		}) => moveEmail({ fromMailboxPath, toMailboxPath, uid }),
 		onSuccess: (_data, { toMailboxPath }) => {
 			queryClient.invalidateQueries({
 				queryKey: emailKeys.byMailbox(fromMailboxPath).queryKey,

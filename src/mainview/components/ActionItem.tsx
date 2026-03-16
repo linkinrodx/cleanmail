@@ -39,7 +39,9 @@ function getActionTitle(action: EmailAction): string {
 }
 
 function getActionIcon(action: EmailAction): LucideIcon {
-	if (action.type === "move") return MoveRightIcon;
+	if (action.type === "move") {
+		return MoveRightIcon;
+	}
 	return FolderInputIcon;
 }
 
@@ -68,6 +70,7 @@ export function ActionItem({ action, currentHref, jobId }: ActionItemProps) {
 	let iconClass: string | undefined;
 	let isJobRunning = false;
 	let isJobSuccess = false;
+
 	if (jobState?.status === "pending" || jobState?.status === "running") {
 		StatusIcon = Loader2Icon;
 		iconClass = "animate-spin";
@@ -94,7 +97,9 @@ export function ActionItem({ action, currentHref, jobId }: ActionItemProps) {
 
 	function handleApply() {
 		const resolvedId = getId(action);
-		if (!resolvedId) return;
+		if (!resolvedId) {
+			return;
+		}
 
 		setJobStatus(resolvedId, { status: "pending" });
 
@@ -116,7 +121,10 @@ export function ActionItem({ action, currentHref, jobId }: ActionItemProps) {
 
 	function handleDelete() {
 		const resolvedId = getId(action);
-		if (!resolvedId) return;
+		if (!resolvedId) {
+			return;
+		}
+
 		removeAction.mutate(resolvedId);
 	}
 
@@ -148,6 +156,7 @@ export function ActionItem({ action, currentHref, jobId }: ActionItemProps) {
 						</Link>
 					</SidebarMenuButton>
 				</ContextMenuTrigger>
+
 				<ContextMenuContent>
 					<ContextMenuItem onClick={handleApply}>
 						<PlayIcon />

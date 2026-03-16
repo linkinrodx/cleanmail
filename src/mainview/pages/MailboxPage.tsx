@@ -1,15 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { RefreshCwIcon } from "lucide-react";
 import { useEffect } from "react";
 import { EmailsPagination } from "@/components/EmailsPagination";
 import { EmailTable } from "@/components/EmailTable";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
 	EMAILS_PER_PAGE,
 	prefetchEmails,
 	useEmails,
 } from "@/hooks/queries/useEmails";
+import { TopBar } from "@/components/TopBar";
 
 type MailboxPageProps = {
 	mailboxPath: string;
@@ -38,7 +37,9 @@ export function MailboxPage({
 
 	// Prefetch adjacent pages once we know the total so navigation feels instant
 	useEffect(() => {
-		if (!total) return;
+		if (!total) {
+			return;
+		}
 
 		const totalPages = Math.ceil(total / EMAILS_PER_PAGE);
 
@@ -57,30 +58,11 @@ export function MailboxPage({
 
 	return (
 		<div className="flex min-h-screen flex-col bg-background">
-			{/* Top bar */}
-			<header className="flex items-center justify-between border-b px-2 py-2">
-				<div className="flex items-center gap-2">
-					<SidebarTrigger />
-					<h1 className="text-sm font-semibold tracking-tight">
-						{mailboxDisplayName}
-					</h1>
-				</div>
-				<div className="flex items-center gap-1">
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						onClick={() => refetch()}
-						disabled={emailsLoading}
-						title="Refresh"
-					>
-						<RefreshCwIcon
-							data-icon="inline"
-							className={emailsLoading ? "animate-spin" : undefined}
-						/>
-						<span className="sr-only">Refresh</span>
-					</Button>
-				</div>
-			</header>
+			<TopBar
+				title={mailboxDisplayName}
+				isLoading={emailsLoading}
+				refetch={refetch}
+			/>
 
 			{/* Main content */}
 			<main className="flex flex-1 flex-col">

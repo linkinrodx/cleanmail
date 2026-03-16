@@ -45,7 +45,10 @@ export function MailboxSidebar() {
 	const seenLabels = new Set<string>();
 	const uniquePinned = pinned.filter((m) => {
 		const label = getMailboxLabel(m);
-		if (seenLabels.has(label)) return false;
+		if (seenLabels.has(label)) {
+			return false;
+		}
+
 		seenLabels.add(label);
 		return true;
 	});
@@ -81,7 +84,7 @@ export function MailboxSidebar() {
 					</SidebarGroup>
 
 					{/* Separator between pinned and the rest */}
-					{!isLoading && rest.length > 0 && (
+					{!isLoading && rest.length > 0 ? (
 						<>
 							<Separator className="mx-2 w-auto" />
 
@@ -100,10 +103,10 @@ export function MailboxSidebar() {
 								</SidebarGroupContent>
 							</SidebarGroup>
 						</>
-					)}
+					) : null}
 
 					{/* Actions group — shown only when there are recorded actions */}
-					{actions.length > 0 && (
+					{actions.length > 0 ? (
 						<>
 							<Separator className="mx-2 w-auto" />
 
@@ -123,7 +126,7 @@ export function MailboxSidebar() {
 								</SidebarGroupContent>
 							</SidebarGroup>
 						</>
-					)}
+					) : null}
 				</SidebarContent>
 
 				<SidebarFooter>

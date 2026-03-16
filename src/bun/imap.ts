@@ -1,31 +1,53 @@
 import { ImapFlow } from "imapflow";
 import keytar from "keytar";
-import type { Email, EmailDetail, Mailbox } from "../shared/rpc-types";
+import type {
+	DeleteEmailData,
+	Email,
+	EmailDetail,
+	FetchEmailDetail,
+	FetchEmailsData,
+	ImapConfig,
+	Mailbox,
+	MoveEmailData,
+	SaveImapConfigData,
+} from "../shared/rpc-types";
 
-export const KEYTAR_SERVICE = "cleanmail";
-export const KEYTAR_ACCOUNT_CONFIG = "imap-config";
-export const KEYTAR_ACCOUNT_PASSWORD = "imap-password";
+const KEYTAR_SERVICE = "cleanmail";
+const KEYTAR_ACCOUNT_CONFIG = "imap-config";
+const KEYTAR_ACCOUNT_PASSWORD = "imap-password";
 
-export async function createImapClient(): Promise<ImapFlow> {
+const getImapConfig = async (): Promise<ImapConfig> => {
 	const configJson = await keytar.getPassword(
 		KEYTAR_SERVICE,
 		KEYTAR_ACCOUNT_CONFIG,
 	);
+	if (!configJson) {
+		throw new Error("IMAP not configured");
+	}
+
+	try {
+		const config = JSON.parse(configJson);
+		return config;
+	} catch {
+		throw new Error("Invalid IMAP config");
+	}
+};
+
+const getImapPassword = async (): Promise<string> => {
 	const password = await keytar.getPassword(
 		KEYTAR_SERVICE,
 		KEYTAR_ACCOUNT_PASSWORD,
 	);
-
-	if (!configJson || !password) {
+	if (!password) {
 		throw new Error("IMAP not configured");
 	}
 
-	let config: { host: string; port: number; username: string };
-	try {
-		config = JSON.parse(configJson);
-	} catch {
-		throw new Error("Invalid IMAP config");
-	}
+	return password;
+};
+
+export const createImapClient = async (): Promise<ImapFlow> => {
+	const config = await getImapConfig();
+	const password = await getImapPassword();
 
 	return new ImapFlow({
 		host: config.host,
@@ -37,20 +59,51 @@ export async function createImapClient(): Promise<ImapFlow> {
 		},
 		logger: false,
 	});
-}
+};
+
+/**
+ * Count how many emails in `mailboxPath` were sent from `authorEmail`.
+ * Returns 0 on any error (treat as "no matches").
+ */
+export const countEmailsFrom = async ({
+	mailboxPath,
+	authorEmail,
+}: {
+	mailboxPath: string;
+	authorEmail: string;
+}): Promise<number> => {
+	let client: ImapFlow | undefined;
+	try {
+		client = await createImapClient();
+		await client.connect();
+
+		const lock = await client.getMailboxLock(mailboxPath);
+		let count = 0;
+		try {
+			const uids = (await client.search(
+				{ from: authorEmail },
+				{ uid: true },
+			)) as number[];
+			count = uids.length;
+		} finally {
+			lock.release();
+		}
+
+		await client.logout();
+		return count;
+	} catch {
+		try {
+			await client?.logout();
+		} catch {
+			// ignore logout errors
+		}
+		return 0;
+	}
+};
 
 export async function rpcGetImapConfig() {
-	const configJson = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_CONFIG,
-	);
-	if (!configJson) return null;
 	try {
-		return JSON.parse(configJson) as {
-			host: string;
-			port: number;
-			username: string;
-		};
+		return await getImapConfig();
 	} catch {
 		return null;
 	}
@@ -61,12 +114,7 @@ export async function rpcSaveImapConfig({
 	port,
 	username,
 	password,
-}: {
-	host: string;
-	port: number;
-	username: string;
-	password: string;
-}) {
+}: SaveImapConfigData) {
 	try {
 		await keytar.setPassword(
 			KEYTAR_SERVICE,
@@ -74,6 +122,7 @@ export async function rpcSaveImapConfig({
 			JSON.stringify({ host, port, username }),
 		);
 		await keytar.setPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT_PASSWORD, password);
+
 		return { success: true };
 	} catch (err) {
 		return {
@@ -88,44 +137,11 @@ export async function rpcFetchEmails({
 	page = 1,
 	itemsPerPage = 20,
 	from,
-}: {
-	mailboxPath: string;
-	page?: number;
-	itemsPerPage?: number;
-	from?: string;
-}) {
-	const configJson = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_CONFIG,
-	);
-	const password = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_PASSWORD,
-	);
-
-	if (!configJson || !password) {
-		return { emails: [], total: 0, error: "IMAP not configured" };
-	}
-
-	let config: { host: string; port: number; username: string };
-	try {
-		config = JSON.parse(configJson);
-	} catch {
-		return { emails: [], total: 0, error: "Invalid IMAP config" };
-	}
-
-	const client = new ImapFlow({
-		host: config.host,
-		port: config.port,
-		secure: config.port === 993,
-		auth: {
-			user: config.username,
-			pass: password,
-		},
-		logger: false,
-	});
+}: FetchEmailsData) {
+	let client: ImapFlow | undefined;
 
 	try {
+		client = await createImapClient();
 		await client.connect();
 
 		const lock = await client.getMailboxLock(mailboxPath);
@@ -177,7 +193,9 @@ export async function rpcFetchEmails({
 
 					for (const msg of messages) {
 						const envelope = msg.envelope;
-						if (!envelope) continue;
+						if (!envelope) {
+							continue;
+						}
 
 						const fromAddress = envelope.from?.[0];
 						const fromStr = fromAddress
@@ -209,7 +227,7 @@ export async function rpcFetchEmails({
 		return { emails, total: matchedTotal };
 	} catch (err) {
 		try {
-			await client.logout();
+			await client?.logout();
 		} catch {
 			// ignore logout errors
 		}
@@ -224,11 +242,9 @@ export async function rpcFetchEmails({
 export async function rpcFetchEmailDetail({
 	mailboxPath,
 	uid,
-}: {
-	mailboxPath: string;
-	uid: number;
-}) {
+}: FetchEmailDetail) {
 	let client: ImapFlow | undefined;
+
 	try {
 		client = await createImapClient();
 		await client.connect();
@@ -261,11 +277,15 @@ export async function rpcFetchEmailDetail({
 						part: NonNullable<typeof msg.bodyStructure>,
 						targetType: string,
 					): NonNullable<typeof msg.bodyStructure> | null => {
-						if (part.type === targetType) return part;
+						if (part.type === targetType) {
+							return part;
+						}
 						if (part.childNodes) {
 							for (const child of part.childNodes) {
 								const found = findPart(child, targetType);
-								if (found) return found;
+								if (found) {
+									return found;
+								}
 							}
 						}
 						return null;
@@ -326,9 +346,7 @@ export async function rpcFetchEmailDetail({
 							});
 							const buf = await readStream(dl.content);
 							textBody = buf.toString("utf-8");
-						} catch {
-							textBody = null;
-						}
+						} catch {}
 					}
 
 					email = {
@@ -362,38 +380,10 @@ export async function rpcFetchEmailDetail({
 }
 
 export async function rpcFetchMailboxes() {
-	const configJson = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_CONFIG,
-	);
-	const password = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_PASSWORD,
-	);
-
-	if (!configJson || !password) {
-		return { mailboxes: [], error: "IMAP not configured" };
-	}
-
-	let config: { host: string; port: number; username: string };
-	try {
-		config = JSON.parse(configJson);
-	} catch {
-		return { mailboxes: [], error: "Invalid IMAP config" };
-	}
-
-	const client = new ImapFlow({
-		host: config.host,
-		port: config.port,
-		secure: config.port === 993,
-		auth: {
-			user: config.username,
-			pass: password,
-		},
-		logger: false,
-	});
+	let client: ImapFlow | undefined;
 
 	try {
+		client = await createImapClient();
 		await client.connect();
 
 		const mailboxes: Mailbox[] = [];
@@ -406,10 +396,17 @@ export async function rpcFetchMailboxes() {
 			folders: typeof tree.folders | undefined,
 			delimiter: string,
 		) => {
-			if (!folders) return;
+			if (!folders) {
+				return;
+			}
+
 			for (const folder of folders) {
-				if (!folder.listed) continue;
-				if (!folder.path || !folder.name) continue;
+				if (!folder.listed) {
+					continue;
+				}
+				if (!folder.path || !folder.name) {
+					continue;
+				}
 
 				mailboxes.push({
 					path: folder.path,
@@ -432,7 +429,8 @@ export async function rpcFetchMailboxes() {
 		await Promise.all(
 			mailboxes.map(async (mailbox) => {
 				try {
-					const status = await client.status(mailbox.path, { unseen: true });
+					// biome-ignore lint/style/noNonNullAssertion: client not null
+					const status = await client!.status(mailbox.path, { unseen: true });
 					mailbox.unreadCount = status.unseen ?? 0;
 				} catch {
 					// Skip mailboxes that can't be queried
@@ -444,7 +442,7 @@ export async function rpcFetchMailboxes() {
 		return { mailboxes };
 	} catch (err) {
 		try {
-			await client.logout();
+			await client?.logout();
 		} catch {
 			// ignore logout errors
 		}
@@ -456,45 +454,18 @@ export async function rpcFetchMailboxes() {
 }
 
 export async function rpcCreateMailbox({ name }: { name: string }) {
-	const configJson = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_CONFIG,
-	);
-	const password = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_PASSWORD,
-	);
-
-	if (!configJson || !password) {
-		return { success: false, error: "IMAP not configured" };
-	}
-
-	let config: { host: string; port: number; username: string };
-	try {
-		config = JSON.parse(configJson);
-	} catch {
-		return { success: false, error: "Invalid IMAP config" };
-	}
-
-	const client = new ImapFlow({
-		host: config.host,
-		port: config.port,
-		secure: config.port === 993,
-		auth: {
-			user: config.username,
-			pass: password,
-		},
-		logger: false,
-	});
+	let client: ImapFlow | undefined;
 
 	try {
+		client = await createImapClient();
 		await client.connect();
 		await client.mailboxCreate(name);
 		await client.logout();
+
 		return { success: true };
 	} catch (err) {
 		try {
-			await client.logout();
+			await client?.logout();
 		} catch {
 			// ignore logout errors
 		}
@@ -509,43 +480,11 @@ export async function rpcMoveEmail({
 	fromMailboxPath,
 	toMailboxPath,
 	uid,
-}: {
-	fromMailboxPath: string;
-	toMailboxPath: string;
-	uid: number;
-}) {
-	const configJson = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_CONFIG,
-	);
-	const password = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_PASSWORD,
-	);
-
-	if (!configJson || !password) {
-		return { success: false, error: "IMAP not configured" };
-	}
-
-	let config: { host: string; port: number; username: string };
-	try {
-		config = JSON.parse(configJson);
-	} catch {
-		return { success: false, error: "Invalid IMAP config" };
-	}
-
-	const client = new ImapFlow({
-		host: config.host,
-		port: config.port,
-		secure: config.port === 993,
-		auth: {
-			user: config.username,
-			pass: password,
-		},
-		logger: false,
-	});
+}: MoveEmailData) {
+	let client: ImapFlow | undefined;
 
 	try {
+		client = await createImapClient();
 		await client.connect();
 
 		const lock = await client.getMailboxLock(fromMailboxPath);
@@ -559,7 +498,7 @@ export async function rpcMoveEmail({
 		return { success: true };
 	} catch (err) {
 		try {
-			await client.logout();
+			await client?.logout();
 		} catch {
 			// ignore logout errors
 		}
@@ -570,87 +509,14 @@ export async function rpcMoveEmail({
 	}
 }
 
-/**
- * Count how many emails in `mailboxPath` were sent from `authorEmail`.
- * Returns 0 on any error (treat as "no matches").
- */
-export async function countEmailsFrom({
-	mailboxPath,
-	authorEmail,
-}: {
-	mailboxPath: string;
-	authorEmail: string;
-}): Promise<number> {
-	let client: ImapFlow | undefined;
-	try {
-		client = await createImapClient();
-		await client.connect();
-
-		const lock = await client.getMailboxLock(mailboxPath);
-		let count = 0;
-		try {
-			const uids = (await client.search(
-				{ from: authorEmail },
-				{ uid: true },
-			)) as number[];
-			count = uids.length;
-		} finally {
-			lock.release();
-		}
-
-		await client.logout();
-		return count;
-	} catch {
-		try {
-			await client?.logout();
-		} catch {
-			// ignore logout errors
-		}
-		return 0;
-	}
-}
-
 export async function rpcDeleteEmail({
 	mailboxPath,
 	uid,
 	trashMailboxPath,
-}: {
-	mailboxPath: string;
-	uid: number;
-	trashMailboxPath?: string;
-}) {
-	const configJson = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_CONFIG,
-	);
-	const password = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_PASSWORD,
-	);
-
-	if (!configJson || !password) {
-		return { success: false, error: "IMAP not configured" };
-	}
-
-	let config: { host: string; port: number; username: string };
+}: DeleteEmailData) {
+	let client: ImapFlow | undefined;
 	try {
-		config = JSON.parse(configJson);
-	} catch {
-		return { success: false, error: "Invalid IMAP config" };
-	}
-
-	const client = new ImapFlow({
-		host: config.host,
-		port: config.port,
-		secure: config.port === 993,
-		auth: {
-			user: config.username,
-			pass: password,
-		},
-		logger: false,
-	});
-
-	try {
+		client = await createImapClient();
 		await client.connect();
 
 		// If a trash mailbox exists and the email is not already in it,
@@ -659,27 +525,23 @@ export async function rpcDeleteEmail({
 			trashMailboxPath &&
 			mailboxPath.toLowerCase() === trashMailboxPath.toLowerCase();
 
-		if (trashMailboxPath && !alreadyInTrash) {
-			const lock = await client.getMailboxLock(mailboxPath);
-			try {
+		const lock = await client.getMailboxLock(mailboxPath);
+
+		try {
+			if (trashMailboxPath && !alreadyInTrash) {
 				await client.messageMove({ uid }, trashMailboxPath, { uid: true });
-			} finally {
-				lock.release();
-			}
-		} else {
-			const lock = await client.getMailboxLock(mailboxPath);
-			try {
+			} else {
 				await client.messageDelete({ uid }, { uid: true });
-			} finally {
-				lock.release();
 			}
+		} finally {
+			lock.release();
 		}
 
 		await client.logout();
 		return { success: true };
 	} catch (err) {
 		try {
-			await client.logout();
+			await client?.logout();
 		} catch {
 			// ignore logout errors
 		}

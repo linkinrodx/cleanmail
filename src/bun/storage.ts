@@ -11,7 +11,7 @@ const APP_NAME = "cleanmail";
  *   - macOS:   ~/Library/Application Support/cleanmail
  *   - Windows: %APPDATA%\cleanmail
  */
-export function getAppDataDir(): string {
+const getAppDataDir = (): string => {
 	const platform = process.platform;
 	const home = process.env.HOME ?? process.env.USERPROFILE ?? ".";
 
@@ -26,7 +26,7 @@ export function getAppDataDir(): string {
 	// Windows
 	const appData = process.env.APPDATA ?? join(home, "AppData", "Roaming");
 	return join(appData, APP_NAME);
-}
+};
 
 const APP_DATA_DIR = getAppDataDir();
 const ACTIONS_FILE = join(APP_DATA_DIR, "actions.json");
@@ -35,9 +35,12 @@ export async function readActions(): Promise<PersistedAction[]> {
 	try {
 		const file = Bun.file(ACTIONS_FILE);
 		const exists = await file.exists();
-		if (!exists) return [];
-		const text = await file.text();
-		return JSON.parse(text) as PersistedAction[];
+		if (!exists) {
+			return [];
+		}
+
+		const content = await file.json();
+		return content as PersistedAction[];
 	} catch {
 		return [];
 	}

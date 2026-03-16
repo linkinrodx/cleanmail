@@ -1,10 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import {
-	CheckCircle2Icon,
-	Loader2Icon,
-	PlayIcon,
-	RefreshCwIcon,
-} from "lucide-react";
+import { Loader2Icon, PlayIcon, RefreshCwIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { EmailsPagination } from "@/components/EmailsPagination";
 import { EmailTable } from "@/components/EmailTable";
@@ -19,6 +14,8 @@ import {
 	prefetchEmails,
 	useEmails,
 } from "@/hooks/queries/useEmails";
+import { ActionOverlaySuccess } from "@/components/ActionOverlaySuccess";
+import { ActionOverlayPending } from "@/components/ActionOverlayPending";
 
 type MoveActionPageProps = {
 	fromMailboxPath: string;
@@ -61,7 +58,9 @@ export function MoveActionPage({
 
 	// Prefetch adjacent pages once we know the total so navigation feels instant
 	useEffect(() => {
-		if (!total) return;
+		if (!total) {
+			return;
+		}
 
 		const totalPages = Math.ceil(total / EMAILS_PER_PAGE);
 
@@ -100,6 +99,7 @@ export function MoveActionPage({
 
 	// Auto-clear on success: remove the action and navigate away
 	const successHandled = useRef(false);
+
 	useEffect(() => {
 		if (isSuccess && jobId && !successHandled.current) {
 			successHandled.current = true;
@@ -113,7 +113,10 @@ export function MoveActionPage({
 	}, [isSuccess, jobId, removeAction, onSuccess]);
 
 	function handleApplyAll() {
-		if (!jobId) return;
+		if (!jobId) {
+			return;
+		}
+
 		setJobStatus(jobId, { status: "pending" });
 		applyMove.mutate({
 			jobId,
@@ -214,30 +217,8 @@ export function MoveActionPage({
 					</>
 				)}
 
-				{/* Loading overlay while the batch job runs */}
-				{isApplying && (
-					<div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
-						<div className="flex flex-col items-center gap-3 rounded-xl border bg-background p-8 shadow-lg">
-							<Loader2Icon className="size-7 animate-spin text-primary" />
-							<div className="text-center">
-								<p className="text-sm font-semibold">Moving all emails…</p>
-								<p className="mt-0.5 text-xs text-muted-foreground">
-									This is running in the background
-								</p>
-							</div>
-						</div>
-					</div>
-				)}
-
-				{/* Success overlay */}
-				{isSuccess && (
-					<div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
-						<div className="flex flex-col items-center gap-3 rounded-xl border bg-background p-8 shadow-lg">
-							<CheckCircle2Icon className="size-7 text-green-500" />
-							<p className="text-sm font-semibold">All emails moved!</p>
-						</div>
-					</div>
-				)}
+				{isApplying ? <ActionOverlayPending text="Moving all emails…" /> : null}
+				{isSuccess ? <ActionOverlaySuccess text="All emails moved!" /> : null}
 			</main>
 		</div>
 	);

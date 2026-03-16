@@ -1,15 +1,11 @@
-import { RefreshCwIcon } from "lucide-react";
 import { useState } from "react";
 import { EmailsPagination } from "@/components/EmailsPagination";
 import { EmailTable } from "@/components/EmailTable";
-import {
-	ImapSetupDialog,
-	ImapSetupTrigger,
-} from "@/components/ImapSetupDialog";
+import { ImapSetupDialog } from "@/components/ImapSetupDialog";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useEmails } from "@/hooks/queries/useEmails";
 import { useImapConfig } from "@/hooks/queries/useImapConfig";
+import { TopBar } from "@/components/TopBar";
 
 type InboxPageProps = {
 	page: number;
@@ -39,29 +35,12 @@ export function InboxPage({ page, onPageChange }: InboxPageProps) {
 
 	return (
 		<div className="flex min-h-screen flex-col bg-background">
-			{/* Top bar */}
-			<header className="flex items-center justify-between border-b px-2 py-2">
-				<div className="flex items-center gap-2">
-					<SidebarTrigger />
-					<h1 className="text-sm font-semibold tracking-tight">Inbox</h1>
-				</div>
-				<div className="flex items-center gap-1">
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						onClick={() => refetch()}
-						disabled={isLoading}
-						title="Refresh"
-					>
-						<RefreshCwIcon
-							data-icon="inline"
-							className={isLoading ? "animate-spin" : undefined}
-						/>
-						<span className="sr-only">Refresh</span>
-					</Button>
-					<ImapSetupTrigger onOpenChange={setSetupOpen} />
-				</div>
-			</header>
+			<TopBar
+				title="Inbox"
+				isLoading={isLoading}
+				refetch={refetch}
+				setSetupOpen={setSetupOpen}
+			/>
 
 			{/* Main content */}
 			<main className="flex flex-1 flex-col">

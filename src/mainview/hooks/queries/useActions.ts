@@ -7,11 +7,13 @@ export function useActions() {
 		...actionKeys.all,
 		queryFn: async () => {
 			const result = await getActions();
+
 			// Sort descending by createdAt so the most recent action appears first
 			const sorted = [...result.actions].sort(
 				(a, b) =>
 					new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
 			);
+
 			return sorted;
 		},
 	});
