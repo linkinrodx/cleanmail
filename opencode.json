@@ -1,0 +1,10 @@
+{
+	"$schema": "https://opencode.ai/config.json",
+	"instructions": ["AGENTS.md"],
+	"default_agent": "orchestration",
+	"agent": {
+		"plan": {
+			"model": "bai/hy3"
+		}
+	}
+}
