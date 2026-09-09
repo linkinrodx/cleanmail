@@ -166,6 +166,16 @@ export type OAuthCompleteMessage =
 	| { account: Account }
 	| { error: string; provider?: AccountProvider };
 
+// ---------------------------------------------------------------------------
+// Window state (custom title-bar)
+// ---------------------------------------------------------------------------
+
+export type WindowState = {
+	isMaximized: boolean;
+	isMinimized: boolean;
+	isFullScreen: boolean;
+};
+
 export type CleanMailRPC = {
 	bun: RPCSchema<{
 		requests: {
@@ -248,6 +258,26 @@ export type CleanMailRPC = {
 				params: ApplyDeleteActionData;
 				response: { queued: boolean; error?: string };
 			};
+			getWindowState: {
+				// biome-ignore lint/suspicious/noConfusingVoidType: RPC request takes no parameters
+				params: void;
+				response: WindowState;
+			};
+			minimizeWindow: {
+				// biome-ignore lint/suspicious/noConfusingVoidType: RPC request takes no parameters
+				params: void;
+				response: { success: boolean };
+			};
+			toggleMaximizeWindow: {
+				// biome-ignore lint/suspicious/noConfusingVoidType: RPC request takes no parameters
+				params: void;
+				response: { success: boolean; isMaximized: boolean };
+			};
+			closeWindow: {
+				// biome-ignore lint/suspicious/noConfusingVoidType: RPC request takes no parameters
+				params: void;
+				response: { success: boolean };
+			};
 		};
 		messages: Record<never, never>;
 	}>;
@@ -258,6 +288,8 @@ export type CleanMailRPC = {
 			actionStatusUpdate: ActionStatusUpdate;
 			/** Sent by the bun process when an OAuth flow completes */
 			oauthComplete: OAuthCompleteMessage;
+			/** Sent by the bun process when the window state changes */
+			windowStateChanged: WindowState;
 		};
 	}>;
 };

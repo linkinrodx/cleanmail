@@ -3,13 +3,16 @@ import type {
 	ActionStatusUpdate,
 	CleanMailRPC,
 	OAuthCompleteMessage,
+	WindowState,
 } from "../../shared/rpc-types";
 
 type ActionStatusListener = (update: ActionStatusUpdate) => void;
 type OAuthCompleteListener = (msg: OAuthCompleteMessage) => void;
+type WindowStateListener = (state: WindowState) => void;
 
 const actionStatusListeners = new Set<ActionStatusListener>();
 const oauthCompleteListeners = new Set<OAuthCompleteListener>();
+const windowStateListeners = new Set<WindowStateListener>();
 
 export function addActionStatusListener(listener: ActionStatusListener) {
 	actionStatusListeners.add(listener);
@@ -27,6 +30,14 @@ export function removeOAuthCompleteListener(listener: OAuthCompleteListener) {
 	oauthCompleteListeners.delete(listener);
 }
 
+export function addWindowStateListener(listener: WindowStateListener) {
+	windowStateListeners.add(listener);
+}
+
+export function removeWindowStateListener(listener: WindowStateListener) {
+	windowStateListeners.delete(listener);
+}
+
 const rpc = Electroview.defineRPC<CleanMailRPC>({
 	maxRequestTime: 30 * 1000,
 	handlers: {
@@ -40,6 +51,11 @@ const rpc = Electroview.defineRPC<CleanMailRPC>({
 			oauthComplete: (msg) => {
 				for (const listener of oauthCompleteListeners) {
 					listener(msg);
+				}
+			},
+			windowStateChanged: (state) => {
+				for (const listener of windowStateListeners) {
+					listener(state);
 				}
 			},
 		},
@@ -77,3 +93,8 @@ export const removeAction = (id: string) => rpc.request.removeAction({ id });
 
 export const applyMoveAction = rpc.request.applyMoveAction;
 export const applyDeleteAction = rpc.request.applyDeleteAction;
+
+export const getWindowState = rpc.request.getWindowState;
+export const minimizeWindow = rpc.request.minimizeWindow;
+export const toggleMaximizeWindow = rpc.request.toggleMaximizeWindow;
+export const closeWindow = rpc.request.closeWindow;
