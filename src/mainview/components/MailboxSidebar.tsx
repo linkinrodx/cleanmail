@@ -1,5 +1,5 @@
-import { useRouterState } from "@tanstack/react-router";
-import { PlusIcon } from "lucide-react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { PlusIcon, UsersIcon } from "lucide-react";
 import { useState } from "react";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useActionsContext } from "@/contexts/ActionsContext";
 import { useMailboxes } from "@/hooks/queries/useMailboxes";
+import { useCurrentAccountId } from "@/hooks/useCurrentAccountId";
 import {
 	getMailboxLabel,
 	getPinnedOrder,
@@ -25,7 +26,6 @@ import {
 import { ActionItem, getActionHref } from "./ActionItem";
 import { MailboxItem } from "./MailboxItem";
 import { NewMailboxDialog } from "./NewMailboxDialog";
-import { useCurrentAccountId } from "@/hooks/useCurrentAccountId";
 
 export function MailboxSidebar() {
 	const currentAccountId = useCurrentAccountId();
@@ -135,6 +135,12 @@ export function MailboxSidebar() {
 
 				<SidebarFooter>
 					<SidebarMenu>
+						<SidebarMenuItem>
+							<SidebarMenuButton render={<Link to="/" />}>
+								<UsersIcon />
+								<span>Accounts</span>
+							</SidebarMenuButton>
+						</SidebarMenuItem>
 						<SidebarMenuItem>
 							<SidebarMenuButton onClick={() => setDialogOpen(true)}>
 								<PlusIcon />

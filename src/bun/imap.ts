@@ -12,6 +12,7 @@ import type {
 import type { Account } from "../shared/rpc-types";
 import { getAccountById } from "./storage";
 import { getValidAccessToken } from "./oauth";
+import { debugLog } from "./debug";
 
 const KEYTAR_SERVICE = "cleanmail";
 const KEYTAR_ACCOUNT_PASSWORD = (accountId: string) =>
@@ -199,6 +200,11 @@ export async function rpcFetchEmails({
 		await client.logout();
 		return { emails, total: matchedTotal };
 	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		const resp = (err as { response?: unknown })?.response;
+		debugLog(
+			`[imap] fetchEmails ERROR: ${msg}${resp !== undefined ? ` | response=${JSON.stringify(resp)}` : ""}`,
+		);
 		try {
 			await client?.logout();
 		} catch {
@@ -207,7 +213,7 @@ export async function rpcFetchEmails({
 		return {
 			emails: [],
 			total: 0,
-			error: err instanceof Error ? err.message : String(err),
+			error: msg,
 		};
 	}
 }

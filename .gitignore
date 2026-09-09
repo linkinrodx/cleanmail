@@ -149,6 +149,7 @@ artifacts
 
 # TanStack Router
 routeTree.gen.ts
+.tanstack/
 
 # Turborepo
 .turbo
