@@ -6,9 +6,7 @@ import {
 	rpcFetchEmailDetail,
 	rpcFetchEmails,
 	rpcFetchMailboxes,
-	rpcGetImapConfig,
 	rpcMoveEmail,
-	rpcSaveImapConfig,
 } from "./imap";
 import { setNotifyWebview } from "./jobs";
 import {
@@ -18,13 +16,25 @@ import {
 	rpcGetActions,
 	rpcRemoveAction,
 } from "./actions";
+import {
+	rpcListAccounts,
+	rpcGetAccount,
+	rpcAddAccountPassword,
+	rpcBeginOAuth,
+	rpcCompleteOAuth,
+	rpcRemoveAccount,
+} from "./accounts";
 
 export const rpc = BrowserView.defineRPC<CleanMailRPC>({
 	maxRequestTime: 30 * 1000,
 	handlers: {
 		requests: {
-			getImapConfig: rpcGetImapConfig,
-			saveImapConfig: rpcSaveImapConfig,
+			listAccounts: rpcListAccounts,
+			getAccount: rpcGetAccount,
+			addAccountPassword: rpcAddAccountPassword,
+			beginOAuth: rpcBeginOAuth,
+			completeOAuth: rpcCompleteOAuth,
+			removeAccount: rpcRemoveAccount,
 			fetchEmails: rpcFetchEmails,
 			fetchEmailDetail: rpcFetchEmailDetail,
 			fetchMailboxes: rpcFetchMailboxes,
@@ -40,5 +50,4 @@ export const rpc = BrowserView.defineRPC<CleanMailRPC>({
 	},
 });
 
-// Wire up the webview notifier now that rpc is defined
 setNotifyWebview((update) => rpc.send.actionStatusUpdate(update));

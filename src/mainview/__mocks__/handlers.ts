@@ -1,4 +1,9 @@
-import type { FetchEmailsData, PersistedAction } from "../../shared/rpc-types";
+import type {
+	BeginOAuthParams,
+	BeginOAuthResult,
+	FetchEmailsData,
+	PersistedAction,
+} from "../../shared/rpc-types";
 import {
 	generateEmailDetail,
 	getEmailsForMailbox,
@@ -15,6 +20,7 @@ function delay(ms: number): Promise<void> {
 export async function mockFetchEmails(params: FetchEmailsData) {
 	await delay(SIMULATED_DELAY_MS);
 
+	// accountId is accepted for signature compatibility but ignored in mock mode
 	const { mailboxPath, page = 1, itemsPerPage = 20, from } = params;
 
 	let emails = getEmailsForMailbox(mailboxPath);
@@ -32,6 +38,7 @@ export async function mockFetchEmails(params: FetchEmailsData) {
 }
 
 export async function mockFetchEmailDetail(params: {
+	accountId: string;
 	mailboxPath: string;
 	uid: number;
 }) {
@@ -41,12 +48,24 @@ export async function mockFetchEmailDetail(params: {
 	return { email };
 }
 
-export async function mockFetchMailboxes() {
+export async function mockFetchMailboxes(_params: { accountId: string }) {
 	await delay(SIMULATED_DELAY_MS);
 	return { mailboxes: MOCK_MAILBOXES };
 }
 
-export async function mockGetActions() {
+export async function mockGetActions(_params: { accountId?: string }) {
 	await delay(SIMULATED_DELAY_MS);
 	return { actions: MOCK_ACTIONS as PersistedAction[] };
+}
+
+export async function mockBeginOAuth(
+	_params: BeginOAuthParams,
+): Promise<BeginOAuthResult> {
+	await delay(SIMULATED_DELAY_MS);
+	return { state: "mock", authUrl: "" };
+}
+
+export async function mockCompleteOAuth() {
+	await delay(SIMULATED_DELAY_MS);
+	return { success: true };
 }

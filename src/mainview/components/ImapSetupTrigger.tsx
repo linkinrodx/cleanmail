@@ -11,10 +11,10 @@ export function ImapSetupTrigger({ onOpenChange }: ImapSetupTriggerProps) {
 			variant="ghost"
 			size="icon-sm"
 			onClick={() => onOpenChange(true)}
-			title="Configure IMAP"
+			title="Add account"
 		>
 			<Settings2Icon data-icon="inline" />
-			<span className="sr-only">Configure IMAP</span>
+			<span className="sr-only">Add account</span>
 		</Button>
 	);
 }

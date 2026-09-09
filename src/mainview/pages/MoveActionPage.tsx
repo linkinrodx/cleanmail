@@ -18,6 +18,7 @@ import { ActionOverlaySuccess } from "@/components/ActionOverlaySuccess";
 import { ActionOverlayPending } from "@/components/ActionOverlayPending";
 
 type MoveActionPageProps = {
+	accountId: string;
 	fromMailboxPath: string;
 	toMailboxPath: string;
 	authorEmail: string;
@@ -28,6 +29,7 @@ type MoveActionPageProps = {
 };
 
 export function MoveActionPage({
+	accountId,
 	fromMailboxPath,
 	toMailboxPath,
 	authorEmail,
@@ -48,8 +50,12 @@ export function MoveActionPage({
 			: (toMailboxPath.split(/[./\\]/).pop() ?? toMailboxPath);
 
 	const { data, isLoading, isError, error, refetch } = useEmails(
+		accountId,
 		fromMailboxPath,
-		{ from: authorEmail, page },
+		{
+			from: authorEmail,
+			page,
+		},
 	);
 
 	const fetchError = data?.error ?? (isError ? String(error) : null);
@@ -65,24 +71,25 @@ export function MoveActionPage({
 		const totalPages = Math.ceil(total / EMAILS_PER_PAGE);
 
 		if (page > 1) {
-			prefetchEmails(queryClient, fromMailboxPath, {
+			prefetchEmails(queryClient, accountId, fromMailboxPath, {
 				from: authorEmail,
 				page: page - 1,
 			});
 		}
 		if (page < totalPages) {
-			prefetchEmails(queryClient, fromMailboxPath, {
+			prefetchEmails(queryClient, accountId, fromMailboxPath, {
 				from: authorEmail,
 				page: page + 1,
 			});
 		}
-	}, [queryClient, fromMailboxPath, authorEmail, page, total]);
+	}, [queryClient, accountId, fromMailboxPath, authorEmail, page, total]);
 
 	// Look up the jobId for this action
 	const { getId } = useActionsContext();
 	const jobId = getId({
 		type: "move",
 		uid: 0,
+		accountId,
 		authorEmail: decodedAuthorEmail,
 		fromMailboxPath,
 		toMailboxPath,
@@ -94,7 +101,7 @@ export function MoveActionPage({
 		jobState?.status === "pending" || jobState?.status === "running";
 	const isSuccess = jobState?.status === "success";
 
-	const applyMove = useApplyMoveAction();
+	const applyMove = useApplyMoveAction(accountId);
 	const removeAction = useRemoveAction();
 
 	// Auto-clear on success: remove the action and navigate away
@@ -120,6 +127,7 @@ export function MoveActionPage({
 		setJobStatus(jobId, { status: "pending" });
 		applyMove.mutate({
 			jobId,
+			accountId,
 			authorEmail: decodedAuthorEmail,
 			fromMailboxPath,
 			toMailboxPath,
@@ -213,7 +221,11 @@ export function MoveActionPage({
 								onPageChange={onPageChange}
 							/>
 						</div>
-						<EmailTable emails={emails} mailboxPath={fromMailboxPath} />
+						<EmailTable
+							emails={emails}
+							accountId={accountId}
+							mailboxPath={fromMailboxPath}
+						/>
 					</>
 				)}
 

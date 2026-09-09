@@ -5,8 +5,10 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { useSaveImapConfig } from "@/hooks/mutations/useSaveImapConfig";
-import { useImapConfig } from "@/hooks/queries/useImapConfig";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { useBeginOAuth } from "@/hooks/mutations/useBeginOAuth";
+import type { AccountProvider } from "../../shared/rpc-types";
 import { ImapSetupForm } from "./ImapSetupForm";
 
 type ImapSetupDialogProps = {
@@ -15,27 +17,56 @@ type ImapSetupDialogProps = {
 };
 
 export function ImapSetupDialog({ open, onOpenChange }: ImapSetupDialogProps) {
-	const { data: existingConfig } = useImapConfig();
-	const { mutateAsync: saveConfig } = useSaveImapConfig();
+	const { mutateAsync: beginOAuth, isPending } = useBeginOAuth();
+
+	const handleOAuth = async (provider: AccountProvider) => {
+		try {
+			const result = await beginOAuth({ provider });
+			if (result.error) {
+				toast.error(result.error);
+				return;
+			}
+			toast.success("Complete sign-in in your browser");
+			onOpenChange(false);
+		} catch (err) {
+			toast.error(
+				err instanceof Error ? err.message : "Could not start the connection",
+			);
+		}
+	};
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent showCloseButton={false}>
 				<DialogHeader>
-					<DialogTitle>Configure IMAP Account</DialogTitle>
+					<DialogTitle>Add account</DialogTitle>
 					<DialogDescription>
-						Enter your mail server details to connect your inbox.
+						Connect your email with OAuth or use IMAP with a password.
 					</DialogDescription>
 				</DialogHeader>
 
-				<ImapSetupForm
-					existingConfig={existingConfig ?? null}
-					onSave={async (values) => {
-						await saveConfig(values);
-						onOpenChange(false);
-					}}
-					onCancel={existingConfig ? () => onOpenChange(false) : undefined}
-				/>
+				<div className="flex flex-col gap-2">
+					<Button
+						variant="outline"
+						onClick={() => handleOAuth("gmail")}
+						disabled={isPending}
+					>
+						Continue with Google
+					</Button>
+					<Button
+						variant="outline"
+						onClick={() => handleOAuth("outlook")}
+						disabled={isPending}
+					>
+						Continue with Microsoft
+					</Button>
+				</div>
+
+				<div className="my-2 text-center text-xs text-muted-foreground">
+					or use IMAP with a password
+				</div>
+
+				<ImapSetupForm onAdded={() => onOpenChange(false)} />
 			</DialogContent>
 		</Dialog>
 	);

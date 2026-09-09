@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { actionKeys } from "@/lib/query-keys";
 import { getActions } from "@/lib/rpc";
+import type { PersistedAction } from "../../../shared/rpc-types";
 
-export function useActions() {
-	return useQuery({
-		...actionKeys.all,
+export function useActions(accountId?: string) {
+	const { data, isLoading } = useQuery({
+		...actionKeys.byAccount(accountId),
 		queryFn: async () => {
-			const result = await getActions();
+			const result = await getActions(accountId);
 
 			// Sort descending by createdAt so the most recent action appears first
 			const sorted = [...result.actions].sort(
@@ -17,4 +18,9 @@ export function useActions() {
 			return sorted;
 		},
 	});
+
+	return {
+		actions: (data as PersistedAction[] | undefined) ?? [],
+		isLoading,
+	};
 }

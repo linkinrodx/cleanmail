@@ -2,16 +2,21 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { emailKeys, mailboxKeys, mutationKeys } from "@/lib/query-keys";
 import { deleteEmail } from "@/lib/rpc";
 
-export function useDeleteEmail(mailboxPath: string, trashMailboxPath?: string) {
+export function useDeleteEmail(
+	accountId: string,
+	mailboxPath: string,
+	trashMailboxPath?: string,
+) {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationKey: mutationKeys.deleteEmail(mailboxPath),
+		mutationKey: mutationKeys.deleteEmail(accountId, mailboxPath),
 		mutationFn: (uid: number) =>
-			deleteEmail({ mailboxPath, uid, trashMailboxPath }),
+			deleteEmail({ accountId, mailboxPath, uid, trashMailboxPath }),
 		onSuccess: () => {
 			queryClient.invalidateQueries({
-				queryKey: emailKeys.byMailbox(mailboxPath).queryKey,
+				queryKey: emailKeys.byAccountAndMailbox(accountId, mailboxPath)
+					.queryKey,
 			});
 
 			if (
@@ -19,11 +24,14 @@ export function useDeleteEmail(mailboxPath: string, trashMailboxPath?: string) {
 				trashMailboxPath.toLowerCase() !== mailboxPath.toLowerCase()
 			) {
 				queryClient.invalidateQueries({
-					queryKey: emailKeys.byMailbox(trashMailboxPath).queryKey,
+					queryKey: emailKeys.byAccountAndMailbox(accountId, trashMailboxPath)
+						.queryKey,
 				});
 			}
 
-			queryClient.invalidateQueries({ queryKey: mailboxKeys._def });
+			queryClient.invalidateQueries({
+				queryKey: mailboxKeys.byAccount(accountId).queryKey,
+			});
 		},
 	});
 }

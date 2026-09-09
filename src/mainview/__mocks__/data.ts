@@ -153,6 +153,7 @@ export const MOCK_ACTIONS: PersistedAction[] = [
 		action: "MOVE",
 		createdAt: "2025-03-01T10:00:00.000Z",
 		data: {
+			accountId: "mock-account",
 			uid: 12,
 			authorEmail: "alice@example.com",
 			fromMailboxPath: "INBOX",
@@ -164,6 +165,7 @@ export const MOCK_ACTIONS: PersistedAction[] = [
 		action: "DELETE",
 		createdAt: "2025-03-05T14:30:00.000Z",
 		data: {
+			accountId: "mock-account",
 			uid: 7,
 			authorEmail: "bob@example.com",
 			mailboxPath: "Newsletters",
@@ -174,6 +176,7 @@ export const MOCK_ACTIONS: PersistedAction[] = [
 		action: "MOVE",
 		createdAt: "2025-03-10T09:15:00.000Z",
 		data: {
+			accountId: "mock-account",
 			uid: 55,
 			authorEmail: "carol@example.com",
 			fromMailboxPath: "Spam",
@@ -185,6 +188,7 @@ export const MOCK_ACTIONS: PersistedAction[] = [
 		action: "DELETE",
 		createdAt: "2025-03-12T16:45:00.000Z",
 		data: {
+			accountId: "mock-account",
 			uid: 33,
 			authorEmail: "dave@example.com",
 			mailboxPath: "INBOX",

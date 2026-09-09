@@ -32,10 +32,15 @@ const extractEmailAddress = (from: string): string => {
 
 type EmailTableProps = {
 	emails: Email[];
+	accountId: string;
 	mailboxPath: string;
 };
 
-export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
+export function EmailTable({
+	emails,
+	accountId,
+	mailboxPath,
+}: EmailTableProps) {
 	const [sorting, setSorting] = useState<SortingState>([
 		{ id: "date", desc: true },
 	]);
@@ -44,13 +49,17 @@ export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
 	const { draggingUid, setDraggingUid, registerDropHandler } = useDragContext();
 	const { addAction } = useActionsContext();
 
-	const { data: mailboxesData } = useMailboxes();
+	const { data: mailboxesData } = useMailboxes(accountId);
 	const trashMailboxPath = mailboxesData?.mailboxes.find(
 		(m) => m.specialUse === "\\Trash",
 	)?.path;
 
-	const { mutate: deleteEmail } = useDeleteEmail(mailboxPath, trashMailboxPath);
-	const { mutate: moveEmail } = useMoveEmail(mailboxPath);
+	const { mutate: deleteEmail } = useDeleteEmail(
+		accountId,
+		mailboxPath,
+		trashMailboxPath,
+	);
+	const { mutate: moveEmail } = useMoveEmail(accountId, mailboxPath);
 
 	// Register the drop handler so the sidebar can trigger a move
 	useEffect(() => {
@@ -80,6 +89,7 @@ export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
 									type: "move",
 									uid,
 									authorEmail,
+									accountId,
 									fromMailboxPath: mailboxPath,
 									toMailboxPath,
 								});
@@ -106,6 +116,7 @@ export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
 		emails,
 		mailboxPath,
 		addAction,
+		accountId,
 	]);
 
 	function handleDragStart(
@@ -132,6 +143,7 @@ export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
 						type: "delete",
 						uid,
 						authorEmail,
+						accountId,
 						mailboxPath,
 					});
 				}
@@ -157,7 +169,7 @@ export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
 					{table.getHeaderGroups().map((headerGroup) => (
 						<TableRow key={headerGroup.id}>
 							{headerGroup.headers.map((header) => (
-								<TableHead key={header.id} style={{ width: header.getSize() }}>
+							<TableHead key={header.id} style={{ width: header.getSize() }}>
 									{flexRender(
 										header.column.columnDef.header,
 										header.getContext(),
@@ -202,6 +214,7 @@ export function EmailTable({ emails, mailboxPath }: EmailTableProps) {
 						setSelectedUid(null);
 					}
 				}}
+				accountId={accountId}
 				mailboxPath={mailboxPath}
 				uid={selectedUid}
 			/>

@@ -14,13 +14,15 @@ import { useCreateMailbox } from "@/hooks/mutations/useCreateMailbox";
 type NewMailboxDialogProps = {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
+	accountId: string | null;
 };
 
 export function NewMailboxDialog({
 	open,
 	onOpenChange,
+	accountId,
 }: NewMailboxDialogProps) {
-	const createMailbox = useCreateMailbox();
+	const createMailbox = useCreateMailbox(accountId ?? "");
 	const [newMailboxName, setNewMailboxName] = useState("");
 
 	function handleCreateMailbox() {
@@ -79,7 +81,9 @@ export function NewMailboxDialog({
 					</Button>
 					<Button
 						onClick={handleCreateMailbox}
-						disabled={!newMailboxName.trim() || createMailbox.isPending}
+						disabled={
+							!accountId || !newMailboxName.trim() || createMailbox.isPending
+						}
 					>
 						{createMailbox.isPending ? "Creating…" : "Create"}
 					</Button>

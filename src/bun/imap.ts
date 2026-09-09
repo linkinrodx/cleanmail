@@ -6,75 +6,76 @@ import type {
 	EmailDetail,
 	FetchEmailDetail,
 	FetchEmailsData,
-	ImapConfig,
 	Mailbox,
 	MoveEmailData,
-	SaveImapConfigData,
 } from "../shared/rpc-types";
+import type { Account } from "../shared/rpc-types";
+import { getAccountById } from "./storage";
+import { getValidAccessToken } from "./oauth";
 
 const KEYTAR_SERVICE = "cleanmail";
-const KEYTAR_ACCOUNT_CONFIG = "imap-config";
-const KEYTAR_ACCOUNT_PASSWORD = "imap-password";
+const KEYTAR_ACCOUNT_PASSWORD = (accountId: string) =>
+	`cleanmail:acct:${accountId}:password`;
 
-const getImapConfig = async (): Promise<ImapConfig> => {
-	const configJson = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_CONFIG,
-	);
-	if (!configJson) {
-		throw new Error("IMAP not configured");
+export async function getAccountCredentials(account: Account): Promise<{
+	user: string;
+	accessToken?: string;
+	pass?: string;
+}> {
+	if (account.authMethod === "password") {
+		const password = await keytar.getPassword(
+			KEYTAR_SERVICE,
+			KEYTAR_ACCOUNT_PASSWORD(account.id),
+		);
+		if (!password) {
+			throw new Error("Password not found for account");
+		}
+		return { user: account.email, pass: password };
 	}
 
-	try {
-		const config = JSON.parse(configJson);
-		return config;
-	} catch {
-		throw new Error("Invalid IMAP config");
+	const accessToken = await getValidAccessToken(account.id);
+	return { user: account.email, accessToken };
+}
+
+export async function createImapClient(account: Account): Promise<ImapFlow> {
+	const credentials = await getAccountCredentials(account);
+
+	const authConfig: { user: string; pass?: string; accessToken?: string } = {
+		user: credentials.user,
+	};
+
+	if (account.authMethod === "password") {
+		authConfig.pass = credentials.pass;
+	} else {
+		authConfig.accessToken = credentials.accessToken;
 	}
-};
-
-const getImapPassword = async (): Promise<string> => {
-	const password = await keytar.getPassword(
-		KEYTAR_SERVICE,
-		KEYTAR_ACCOUNT_PASSWORD,
-	);
-	if (!password) {
-		throw new Error("IMAP not configured");
-	}
-
-	return password;
-};
-
-export const createImapClient = async (): Promise<ImapFlow> => {
-	const config = await getImapConfig();
-	const password = await getImapPassword();
 
 	return new ImapFlow({
-		host: config.host,
-		port: config.port,
-		secure: config.port === 993,
-		auth: {
-			user: config.username,
-			pass: password,
-		},
+		host: account.host,
+		port: account.port,
+		secure: account.port === 993,
+		auth: authConfig,
 		logger: false,
 	});
-};
+}
 
-/**
- * Count how many emails in `mailboxPath` were sent from `authorEmail`.
- * Returns 0 on any error (treat as "no matches").
- */
-export const countEmailsFrom = async ({
+export async function countEmailsFrom({
+	accountId,
 	mailboxPath,
 	authorEmail,
 }: {
+	accountId: string;
 	mailboxPath: string;
 	authorEmail: string;
-}): Promise<number> => {
+}): Promise<number> {
+	const account = await getAccountById(accountId);
+	if (!account) {
+		return 0;
+	}
+
 	let client: ImapFlow | undefined;
 	try {
-		client = await createImapClient();
+		client = await createImapClient(account);
 		await client.connect();
 
 		const lock = await client.getMailboxLock(mailboxPath);
@@ -99,49 +100,24 @@ export const countEmailsFrom = async ({
 		}
 		return 0;
 	}
-};
-
-export async function rpcGetImapConfig() {
-	try {
-		return await getImapConfig();
-	} catch {
-		return null;
-	}
-}
-
-export async function rpcSaveImapConfig({
-	host,
-	port,
-	username,
-	password,
-}: SaveImapConfigData) {
-	try {
-		await keytar.setPassword(
-			KEYTAR_SERVICE,
-			KEYTAR_ACCOUNT_CONFIG,
-			JSON.stringify({ host, port, username }),
-		);
-		await keytar.setPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT_PASSWORD, password);
-
-		return { success: true };
-	} catch (err) {
-		return {
-			success: false,
-			error: err instanceof Error ? err.message : String(err),
-		};
-	}
 }
 
 export async function rpcFetchEmails({
+	accountId,
 	mailboxPath,
 	page = 1,
 	itemsPerPage = 20,
 	from,
 }: FetchEmailsData) {
+	const account = await getAccountById(accountId);
+	if (!account) {
+		return { emails: [], total: 0, error: "Account not found" };
+	}
+
 	let client: ImapFlow | undefined;
 
 	try {
-		client = await createImapClient();
+		client = await createImapClient(account);
 		await client.connect();
 
 		const lock = await client.getMailboxLock(mailboxPath);
@@ -158,7 +134,6 @@ export async function rpcFetchEmails({
 				let fetchRange: { uid: string } | { seq: string } | undefined;
 
 				if (from) {
-					// Use UID SEARCH so the server filters by the From header.
 					const allUids = (await client.search(
 						{ from },
 						{ uid: true },
@@ -174,7 +149,6 @@ export async function rpcFetchEmails({
 						fetchRange = { uid: pageUids.join(",") };
 					}
 				} else {
-					// No filter — compute the seq range arithmetically (no SEARCH needed).
 					matchedTotal = total;
 					const seqEnd = Math.max(1, total - offset);
 					const seqStart = Math.max(1, seqEnd - itemsPerPage + 1);
@@ -213,7 +187,6 @@ export async function rpcFetchEmails({
 						});
 					}
 
-					// Sort newest first (fetch order is not guaranteed)
 					emails.sort(
 						(a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
 					);
@@ -240,13 +213,19 @@ export async function rpcFetchEmails({
 }
 
 export async function rpcFetchEmailDetail({
+	accountId,
 	mailboxPath,
 	uid,
 }: FetchEmailDetail) {
+	const account = await getAccountById(accountId);
+	if (!account) {
+		return { email: null, error: "Account not found" };
+	}
+
 	let client: ImapFlow | undefined;
 
 	try {
-		client = await createImapClient();
+		client = await createImapClient(account);
 		await client.connect();
 
 		const lock = await client.getMailboxLock(mailboxPath);
@@ -272,7 +251,6 @@ export async function rpcFetchEmailDetail({
 					let htmlBody: string | null = null;
 					let textBody: string | null = null;
 
-					// Find a part by MIME type, recursing into multipart nodes
 					const findPart = (
 						part: NonNullable<typeof msg.bodyStructure>,
 						targetType: string,
@@ -291,7 +269,6 @@ export async function rpcFetchEmailDetail({
 						return null;
 					};
 
-					// Helper to read a Readable stream into a Buffer
 					const readStream = async (
 						readable: NodeJS.ReadableStream,
 					): Promise<Buffer> => {
@@ -338,7 +315,6 @@ export async function rpcFetchEmailDetail({
 						}
 					}
 
-					// Final fallback: download full message source
 					if (htmlBody === null && textBody === null) {
 						try {
 							const dl = await client.download(String(uid), undefined, {
@@ -379,19 +355,22 @@ export async function rpcFetchEmailDetail({
 	}
 }
 
-export async function rpcFetchMailboxes() {
+export async function rpcFetchMailboxes({ accountId }: { accountId: string }) {
+	const account = await getAccountById(accountId);
+	if (!account) {
+		return { mailboxes: [], error: "Account not found" };
+	}
+
 	let client: ImapFlow | undefined;
 
 	try {
-		client = await createImapClient();
+		client = await createImapClient(account);
 		await client.connect();
 
 		const mailboxes: Mailbox[] = [];
 
-		// List all mailboxes recursively
 		const tree = await client.listTree();
 
-		// Flatten the tree into a list of mailboxes
 		const flattenTree = (
 			folders: typeof tree.folders | undefined,
 			delimiter: string,
@@ -414,7 +393,7 @@ export async function rpcFetchMailboxes() {
 					delimiter,
 					flags: [...(folder.flags ?? [])],
 					specialUse: folder.specialUse ?? undefined,
-					unreadCount: 0, // Will be populated below
+					unreadCount: 0,
 				});
 
 				if (folder.folders?.length) {
@@ -425,13 +404,11 @@ export async function rpcFetchMailboxes() {
 
 		flattenTree(tree.folders, tree.delimiter ?? "/");
 
-		// Fetch unread counts for each mailbox
 		await Promise.all(
 			mailboxes.map(async (mailbox) => {
 				try {
-					// biome-ignore lint/style/noNonNullAssertion: client not null
-					const status = await client!.status(mailbox.path, { unseen: true });
-					mailbox.unreadCount = status.unseen ?? 0;
+					const status = await client?.status(mailbox.path, { unseen: true });
+					mailbox.unreadCount = status?.unseen ?? 0;
 				} catch {
 					// Skip mailboxes that can't be queried
 				}
@@ -453,11 +430,22 @@ export async function rpcFetchMailboxes() {
 	}
 }
 
-export async function rpcCreateMailbox({ name }: { name: string }) {
+export async function rpcCreateMailbox({
+	accountId,
+	name,
+}: {
+	accountId: string;
+	name: string;
+}) {
+	const account = await getAccountById(accountId);
+	if (!account) {
+		return { success: false, error: "Account not found" };
+	}
+
 	let client: ImapFlow | undefined;
 
 	try {
-		client = await createImapClient();
+		client = await createImapClient(account);
 		await client.connect();
 		await client.mailboxCreate(name);
 		await client.logout();
@@ -477,14 +465,20 @@ export async function rpcCreateMailbox({ name }: { name: string }) {
 }
 
 export async function rpcMoveEmail({
+	accountId,
 	fromMailboxPath,
 	toMailboxPath,
 	uid,
 }: MoveEmailData) {
+	const account = await getAccountById(accountId);
+	if (!account) {
+		return { success: false, error: "Account not found" };
+	}
+
 	let client: ImapFlow | undefined;
 
 	try {
-		client = await createImapClient();
+		client = await createImapClient(account);
 		await client.connect();
 
 		const lock = await client.getMailboxLock(fromMailboxPath);
@@ -510,17 +504,21 @@ export async function rpcMoveEmail({
 }
 
 export async function rpcDeleteEmail({
+	accountId,
 	mailboxPath,
 	uid,
 	trashMailboxPath,
 }: DeleteEmailData) {
+	const account = await getAccountById(accountId);
+	if (!account) {
+		return { success: false, error: "Account not found" };
+	}
+
 	let client: ImapFlow | undefined;
 	try {
-		client = await createImapClient();
+		client = await createImapClient(account);
 		await client.connect();
 
-		// If a trash mailbox exists and the email is not already in it,
-		// move to trash instead of permanently deleting.
 		const alreadyInTrash =
 			trashMailboxPath &&
 			mailboxPath.toLowerCase() === trashMailboxPath.toLowerCase();

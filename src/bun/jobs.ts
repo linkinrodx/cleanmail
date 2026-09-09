@@ -1,14 +1,12 @@
 import type { ImapFlow } from "imapflow";
 import type { ActionStatusUpdate } from "../shared/rpc-types";
 import { createImapClient } from "./imap";
-
-// ---------------------------------------------------------------------------
-// Background job types
-// ---------------------------------------------------------------------------
+import { getAccountById } from "./storage";
 
 type ApplyMoveJob = {
 	type: "move";
 	jobId: string;
+	accountId: string;
 	authorEmail: string;
 	fromMailboxPath: string;
 	toMailboxPath: string;
@@ -17,21 +15,14 @@ type ApplyMoveJob = {
 type ApplyDeleteJob = {
 	type: "delete";
 	jobId: string;
+	accountId: string;
 	authorEmail: string;
 	mailboxPath: string;
 };
 
 type ApplyJob = ApplyMoveJob | ApplyDeleteJob;
 
-// ---------------------------------------------------------------------------
-// Job queue
-// ---------------------------------------------------------------------------
-
 export const jobQueue: ApplyJob[] = [];
-
-// ---------------------------------------------------------------------------
-// Webview notifier (injected after rpc is initialised)
-// ---------------------------------------------------------------------------
 
 type NotifyFn = (update: ActionStatusUpdate) => void;
 
@@ -49,13 +40,6 @@ export function notifyWebview(update: ActionStatusUpdate) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Job processor
-// ---------------------------------------------------------------------------
-
-/**
- * Find all UIDs from this sender in the source mailbox
- */
 const processMoveJob = async (client: ImapFlow, job: ApplyMoveJob) => {
 	const lock = await client.getMailboxLock(job.fromMailboxPath);
 	try {
@@ -74,9 +58,6 @@ const processMoveJob = async (client: ImapFlow, job: ApplyMoveJob) => {
 	}
 };
 
-/**
- * Determine trash mailbox (if any) so we respect the trash rule
- */
 const processDeleteJob = async (client: ImapFlow, job: ApplyDeleteJob) => {
 	const mailboxList = await client.list();
 	const trashMailbox = mailboxList.find(
@@ -115,9 +96,19 @@ const processDeleteJob = async (client: ImapFlow, job: ApplyDeleteJob) => {
 export async function processJob(job: ApplyJob) {
 	notifyWebview({ jobId: job.jobId, status: "running" });
 
+	const account = await getAccountById(job.accountId);
+	if (!account) {
+		notifyWebview({
+			jobId: job.jobId,
+			status: "error",
+			error: "Account not found",
+		});
+		return;
+	}
+
 	let client: ImapFlow | undefined;
 	try {
-		client = await createImapClient();
+		client = await createImapClient(account);
 		await client.connect();
 
 		if (job.type === "move") {
@@ -142,11 +133,7 @@ export async function processJob(job: ApplyJob) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Background interval — process one job per second
-// ---------------------------------------------------------------------------
-
-let jobLock = false; // lock to only process one job simultaneously
+let jobLock = false;
 
 setInterval(async () => {
 	if (jobLock) {

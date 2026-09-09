@@ -1,12 +1,12 @@
 import { createQueryKeys } from "@lukemorales/query-key-factory";
 
-export const imapConfigKeys = createQueryKeys("imap-config", {
+export const accountKeys = createQueryKeys("accounts", {
 	all: null,
 });
 
 export const emailKeys = createQueryKeys("emails", {
-	byMailbox: (path: string) => ({
-		queryKey: [path],
+	byAccountAndMailbox: (accountId: string, path: string) => ({
+		queryKey: [accountId, path],
 		contextQueries: {
 			filtered: (filters: {
 				page?: number;
@@ -23,20 +23,37 @@ export const emailKeys = createQueryKeys("emails", {
 });
 
 export const mailboxKeys = createQueryKeys("mailboxes", {
-	all: null,
+	byAccount: (accountId: string) => ({
+		queryKey: [accountId],
+	}),
 });
 
 export const actionKeys = createQueryKeys("actions", {
-	all: null,
+	byAccount: (accountId?: string) => ({
+		queryKey: [accountId ?? "all"],
+	}),
 });
 
 export const mutationKeys = {
-	saveImapConfig: () => ["imap-config", "save"],
 	addAction: () => ["actions", "add"],
 	removeAction: () => ["actions", "remove"],
-	applyDeleteAction: () => ["actions", "apply-delete"],
-	applyMoveAction: () => ["actions", "apply-move"],
-	createMailbox: () => ["mailboxes", "create"],
-	deleteEmail: (mailboxPath: string) => ["emails", mailboxPath, "delete"],
-	moveEmail: (fromMailboxPath: string) => ["emails", fromMailboxPath, "move"],
+	applyDeleteAction: (accountId: string) => [
+		"actions",
+		accountId,
+		"apply-delete",
+	],
+	applyMoveAction: (accountId: string) => ["actions", accountId, "apply-move"],
+	createMailbox: (accountId: string) => ["mailboxes", accountId, "create"],
+	deleteEmail: (accountId: string, mailboxPath: string) => [
+		"emails",
+		accountId,
+		mailboxPath,
+		"delete",
+	],
+	moveEmail: (accountId: string, fromMailboxPath: string) => [
+		"emails",
+		accountId,
+		fromMailboxPath,
+		"move",
+	],
 };

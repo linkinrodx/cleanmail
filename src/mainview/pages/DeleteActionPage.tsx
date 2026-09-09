@@ -18,6 +18,7 @@ import { ActionOverlaySuccess } from "@/components/ActionOverlaySuccess";
 import { ActionOverlayPending } from "@/components/ActionOverlayPending";
 
 type DeleteActionPageProps = {
+	accountId: string;
 	mailboxPath: string;
 	authorEmail: string;
 	decodedAuthorEmail: string;
@@ -27,6 +28,7 @@ type DeleteActionPageProps = {
 };
 
 export function DeleteActionPage({
+	accountId,
 	mailboxPath,
 	authorEmail,
 	decodedAuthorEmail,
@@ -41,10 +43,14 @@ export function DeleteActionPage({
 			? "Inbox"
 			: (mailboxPath.split(/[./\\]/).pop() ?? mailboxPath);
 
-	const { data, isLoading, isError, error, refetch } = useEmails(mailboxPath, {
-		from: authorEmail,
-		page,
-	});
+	const { data, isLoading, isError, error, refetch } = useEmails(
+		accountId,
+		mailboxPath,
+		{
+			from: authorEmail,
+			page,
+		},
+	);
 
 	const fetchError = data?.error ?? (isError ? String(error) : null);
 	const emails = data?.emails || [];
@@ -59,24 +65,25 @@ export function DeleteActionPage({
 		const totalPages = Math.ceil(total / EMAILS_PER_PAGE);
 
 		if (page > 1) {
-			prefetchEmails(queryClient, mailboxPath, {
+			prefetchEmails(queryClient, accountId, mailboxPath, {
 				from: authorEmail,
 				page: page - 1,
 			});
 		}
 		if (page < totalPages) {
-			prefetchEmails(queryClient, mailboxPath, {
+			prefetchEmails(queryClient, accountId, mailboxPath, {
 				from: authorEmail,
 				page: page + 1,
 			});
 		}
-	}, [queryClient, mailboxPath, authorEmail, page, total]);
+	}, [queryClient, accountId, mailboxPath, authorEmail, page, total]);
 
 	// Look up the jobId for this action
 	const { getId } = useActionsContext();
 	const jobId = getId({
 		type: "delete",
 		uid: 0,
+		accountId,
 		authorEmail: decodedAuthorEmail,
 		mailboxPath,
 	});
@@ -87,7 +94,7 @@ export function DeleteActionPage({
 		jobState?.status === "pending" || jobState?.status === "running";
 	const isSuccess = jobState?.status === "success";
 
-	const applyDelete = useApplyDeleteAction();
+	const applyDelete = useApplyDeleteAction(accountId);
 	const removeAction = useRemoveAction();
 
 	// Auto-clear on success: remove the action and navigate away
@@ -113,6 +120,7 @@ export function DeleteActionPage({
 		setJobStatus(jobId, { status: "pending" });
 		applyDelete.mutate({
 			jobId,
+			accountId,
 			authorEmail: decodedAuthorEmail,
 			mailboxPath,
 		});
@@ -205,7 +213,11 @@ export function DeleteActionPage({
 								onPageChange={onPageChange}
 							/>
 						</div>
-						<EmailTable emails={emails} mailboxPath={mailboxPath} />
+						<EmailTable
+							emails={emails}
+							accountId={accountId}
+							mailboxPath={mailboxPath}
+						/>
 					</>
 				)}
 

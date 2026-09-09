@@ -25,9 +25,11 @@ import {
 import { ActionItem, getActionHref } from "./ActionItem";
 import { MailboxItem } from "./MailboxItem";
 import { NewMailboxDialog } from "./NewMailboxDialog";
+import { useCurrentAccountId } from "@/hooks/useCurrentAccountId";
 
 export function MailboxSidebar() {
-	const { data, isLoading } = useMailboxes();
+	const currentAccountId = useCurrentAccountId();
+	const { data, isLoading } = useMailboxes(currentAccountId);
 	const { actions, getId } = useActionsContext();
 	const routerState = useRouterState();
 
@@ -76,6 +78,7 @@ export function MailboxSidebar() {
 											<MailboxItem
 												key={mailbox.path}
 												mailbox={mailbox}
+												accountId={currentAccountId ?? ""}
 												currentPathname={currentPathname}
 											/>
 										))}
@@ -96,6 +99,7 @@ export function MailboxSidebar() {
 											<MailboxItem
 												key={mailbox.path}
 												mailbox={mailbox}
+												accountId={currentAccountId ?? ""}
 												currentPathname={currentPathname}
 											/>
 										))}
@@ -143,7 +147,11 @@ export function MailboxSidebar() {
 				<SidebarRail />
 			</Sidebar>
 
-			<NewMailboxDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+			<NewMailboxDialog
+				open={dialogOpen}
+				onOpenChange={setDialogOpen}
+				accountId={currentAccountId}
+			/>
 		</>
 	);
 }

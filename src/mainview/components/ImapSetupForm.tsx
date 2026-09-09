@@ -9,33 +9,43 @@ import {
 	FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import type { ImapConfig } from "../../shared/rpc-types";
+import { toast } from "sonner";
+import { useAddAccountPassword } from "@/hooks/mutations/useAddAccountPassword";
 
 type ImapSetupFormProps = {
-	existingConfig: ImapConfig | null;
-	onSave: (values: {
-		host: string;
-		port: number;
-		username: string;
-		password: string;
-	}) => Promise<void>;
-	onCancel?: () => void;
+	onAdded: () => void;
 };
 
-export function ImapSetupForm({
-	existingConfig,
-	onSave,
-	onCancel,
-}: ImapSetupFormProps) {
+export function ImapSetupForm({ onAdded }: ImapSetupFormProps) {
+	const { mutateAsync: addAccount, isPending } = useAddAccountPassword();
+
 	const form = useForm({
 		defaultValues: {
-			host: existingConfig?.host ?? "",
-			port: existingConfig?.port ?? 993,
-			username: existingConfig?.username ?? "",
+			email: "",
+			host: "",
+			port: 993,
 			password: "",
 		},
 		onSubmit: async ({ value }) => {
-			await onSave(value);
+			try {
+				const result = await addAccount({
+					provider: "custom",
+					email: value.email,
+					host: value.host,
+					port: value.port,
+					password: value.password,
+				});
+				if (result.success) {
+					toast.success("Account added");
+					onAdded();
+				} else {
+					toast.error(result.error ?? "Could not add the account");
+				}
+			} catch (err) {
+				toast.error(
+					err instanceof Error ? err.message : "Could not add the account",
+				);
+			}
 		},
 	});
 
@@ -47,6 +57,37 @@ export function ImapSetupForm({
 			}}
 		>
 			<FieldGroup>
+				<form.Field
+					name="email"
+					validators={{
+						onChange: ({ value }) =>
+							!value.trim() ? "Email is required" : undefined,
+					}}
+				>
+					{(field) => (
+						<Field
+							data-invalid={field.state.meta.errors.length > 0 || undefined}
+						>
+							<FieldLabel htmlFor={field.name}>Email</FieldLabel>
+							<Input
+								id={field.name}
+								name={field.name}
+								value={field.state.value}
+								placeholder="you@example.com"
+								autoComplete="username"
+								onChange={(e) => field.handleChange(e.target.value)}
+								onBlur={field.handleBlur}
+								aria-invalid={field.state.meta.errors.length > 0 || undefined}
+							/>
+							<FieldError
+								errors={field.state.meta.errors.map((e) => ({
+									message: String(e),
+								}))}
+							/>
+						</Field>
+					)}
+				</form.Field>
+
 				<form.Field
 					name="host"
 					validators={{
@@ -69,7 +110,7 @@ export function ImapSetupForm({
 								aria-invalid={field.state.meta.errors.length > 0 || undefined}
 							/>
 							<FieldDescription>
-								Your IMAP server hostname or IP address.
+								Your IMAP server hostname (e.g. imap.gmail.com).
 							</FieldDescription>
 							<FieldError
 								errors={field.state.meta.errors.map((e) => ({
@@ -107,39 +148,8 @@ export function ImapSetupForm({
 								aria-invalid={field.state.meta.errors.length > 0 || undefined}
 							/>
 							<FieldDescription>
-								Use 993 for SSL/TLS (recommended) or 143 for STARTTLS.
+								Use 993 for SSL/TLS (recommended).
 							</FieldDescription>
-							<FieldError
-								errors={field.state.meta.errors.map((e) => ({
-									message: String(e),
-								}))}
-							/>
-						</Field>
-					)}
-				</form.Field>
-
-				<form.Field
-					name="username"
-					validators={{
-						onChange: ({ value }) =>
-							!value.trim() ? "Username is required" : undefined,
-					}}
-				>
-					{(field) => (
-						<Field
-							data-invalid={field.state.meta.errors.length > 0 || undefined}
-						>
-							<FieldLabel htmlFor={field.name}>Username</FieldLabel>
-							<Input
-								id={field.name}
-								name={field.name}
-								value={field.state.value}
-								placeholder="you@example.com"
-								autoComplete="username"
-								onChange={(e) => field.handleChange(e.target.value)}
-								onBlur={field.handleBlur}
-								aria-invalid={field.state.meta.errors.length > 0 || undefined}
-							/>
 							<FieldError
 								errors={field.state.meta.errors.map((e) => ({
 									message: String(e),
@@ -166,9 +176,7 @@ export function ImapSetupForm({
 								name={field.name}
 								type="password"
 								value={field.state.value}
-								placeholder={
-									existingConfig ? "Leave empty to keep current" : "••••••••"
-								}
+								placeholder="••••••••"
 								autoComplete="current-password"
 								onChange={(e) => field.handleChange(e.target.value)}
 								onBlur={field.handleBlur}
@@ -188,15 +196,10 @@ export function ImapSetupForm({
 			</FieldGroup>
 
 			<DialogFooter className="mt-4">
-				{onCancel && (
-					<Button type="button" variant="outline" onClick={onCancel}>
-						Cancel
-					</Button>
-				)}
-				<form.Subscribe selector={(s) => s.isSubmitting}>
-					{(isSubmitting) => (
-						<Button type="submit" disabled={isSubmitting}>
-							{isSubmitting ? "Saving…" : "Save"}
+				<form.Subscribe selector={(s) => s.isSubmitting || isPending}>
+					{(submitting) => (
+						<Button type="submit" disabled={submitting}>
+							{submitting ? "Saving…" : "Add account"}
 						</Button>
 					)}
 				</form.Subscribe>

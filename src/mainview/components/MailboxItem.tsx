@@ -11,22 +11,28 @@ import { getMailboxIcon, getMailboxLabel } from "../lib/mailbox-utils";
 
 type MailboxItemProps = {
 	mailbox: Mailbox;
+	accountId: string;
 	currentPathname: string;
 };
 
-export function MailboxItem({ mailbox, currentPathname }: MailboxItemProps) {
+export function MailboxItem({
+	mailbox,
+	accountId,
+	currentPathname,
+}: MailboxItemProps) {
 	const Icon = getMailboxIcon(mailbox);
 	const label = getMailboxLabel(mailbox);
 
-	// "/" maps to INBOX; all others use "/mailbox/<encoded>"
 	const href =
 		mailbox.path === "INBOX"
-			? "/"
-			: `/mailbox/${encodeURIComponent(mailbox.path)}`;
+			? `/account/${accountId}`
+			: `/account/${accountId}/mailbox/${encodeURIComponent(mailbox.path)}`;
 	const isActive =
 		mailbox.path === "INBOX"
-			? currentPathname === "/"
-			: currentPathname === `/mailbox/${encodeURIComponent(mailbox.path)}`;
+			? currentPathname === `/account/${accountId}` ||
+				currentPathname === `/account/${accountId}/`
+			: currentPathname ===
+				`/account/${accountId}/mailbox/${encodeURIComponent(mailbox.path)}`;
 
 	const { draggingUid, onDropToMailbox, setDraggingUid } = useDragContext();
 	const [isDragOver, setIsDragOver] = useState(false);

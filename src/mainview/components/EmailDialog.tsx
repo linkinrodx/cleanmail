@@ -12,6 +12,7 @@ import { formatDate } from "@/lib/format";
 type EmailDialogProps = {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
+	accountId: string;
 	mailboxPath: string;
 	uid: number | null;
 };
@@ -19,10 +20,16 @@ type EmailDialogProps = {
 export function EmailDialog({
 	open,
 	onOpenChange,
+	accountId,
 	mailboxPath,
 	uid,
 }: EmailDialogProps) {
-	const { data, isLoading, isError } = useEmailDetail(mailboxPath, uid, open);
+	const { data, isLoading, isError } = useEmailDetail(
+		accountId,
+		mailboxPath,
+		uid,
+		open,
+	);
 
 	const email = data?.email ?? null;
 

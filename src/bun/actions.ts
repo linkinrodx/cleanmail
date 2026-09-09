@@ -2,15 +2,18 @@ import type {
 	ApplyDeleteActionData,
 	ApplyMoveActionData,
 	PersistedAction,
-} from "src/shared/rpc-types";
+} from "../shared/rpc-types";
 import { countEmailsFrom } from "./imap";
 import { jobQueue } from "./jobs";
 import { readActions, writeActions } from "./storage";
 
-export const rpcGetActions = async () => {
+export const rpcGetActions = async ({ accountId }: { accountId?: string }) => {
 	try {
 		const actions = await readActions();
-		return { actions };
+		const filtered = accountId
+			? actions.filter((a) => a.data.accountId === accountId)
+			: actions;
+		return { actions: filtered };
 	} catch (err) {
 		return {
 			actions: [],
@@ -21,14 +24,13 @@ export const rpcGetActions = async () => {
 
 export const rpcAddAction = async (newAction: PersistedAction) => {
 	try {
-		// Only persist the action when at least 1 other email in the
-		// relevant mailbox matches the same sender filter.
 		const mailboxToSearch =
 			newAction.action === "MOVE"
 				? newAction.data.fromMailboxPath
 				: newAction.data.mailboxPath;
 
 		const matchCount = await countEmailsFrom({
+			accountId: newAction.data.accountId,
 			mailboxPath: mailboxToSearch,
 			authorEmail: newAction.data.authorEmail,
 		});
@@ -39,10 +41,10 @@ export const rpcAddAction = async (newAction: PersistedAction) => {
 
 		const actions = await readActions();
 
-		// Deduplicate by comparing action type + key fields
 		const isDuplicate = actions.some((a) => {
 			if (a.action === "MOVE" && newAction.action === "MOVE") {
 				return (
+					a.data.accountId === newAction.data.accountId &&
 					a.data.authorEmail === newAction.data.authorEmail &&
 					a.data.fromMailboxPath === newAction.data.fromMailboxPath &&
 					a.data.toMailboxPath === newAction.data.toMailboxPath
@@ -50,6 +52,7 @@ export const rpcAddAction = async (newAction: PersistedAction) => {
 			}
 			if (a.action === "DELETE" && newAction.action === "DELETE") {
 				return (
+					a.data.accountId === newAction.data.accountId &&
 					a.data.authorEmail === newAction.data.authorEmail &&
 					a.data.mailboxPath === newAction.data.mailboxPath
 				);

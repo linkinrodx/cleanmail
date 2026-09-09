@@ -1,18 +1,20 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { DeleteActionPage } from "@/pages/DeleteActionPage";
 
-export const Route = createFileRoute("/actions/$mailbox/delete/$authorEmail")({
+export const Route = createFileRoute(
+	"/account/$accountId/actions/$mailbox/delete/$authorEmail",
+)({
 	validateSearch: (search: Record<string, unknown>) => ({
 		page: Number(search.page) || 1,
 	}),
-	component: DeleteActionRoute,
+	component: AccountDeleteActionRoute,
 });
 
-function DeleteActionRoute() {
-	const { mailbox, authorEmail } = Route.useParams();
+function AccountDeleteActionRoute() {
+	const { accountId, mailbox, authorEmail } = Route.useParams();
 	const { page } = Route.useSearch();
 	const navigate = useNavigate({
-		from: "/actions/$mailbox/delete/$authorEmail",
+		from: "/account/$accountId/actions/$mailbox/delete/$authorEmail",
 	});
 
 	const mailboxPath = decodeURIComponent(mailbox);
@@ -20,12 +22,19 @@ function DeleteActionRoute() {
 
 	return (
 		<DeleteActionPage
+			accountId={accountId}
 			mailboxPath={mailboxPath}
 			authorEmail={authorEmail}
 			decodedAuthorEmail={decodedAuthorEmail}
 			page={page}
 			onPageChange={(p) => navigate({ search: { page: p } })}
-			onSuccess={() => navigate({ to: "/", search: { page: 1 } })}
+			onSuccess={() =>
+				navigate({
+					to: "/account/$accountId",
+					params: { accountId },
+					search: { page: 1 },
+				})
+			}
 		/>
 	);
 }

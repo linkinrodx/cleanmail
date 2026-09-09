@@ -1,16 +1,37 @@
 import type { RPCSchema } from "electrobun/bun";
 
-export type ImapConfig = {
-	host: string;
-	port: number;
-	username: string;
+// ---------------------------------------------------------------------------
+// Account model (replaces the old single ImapConfig)
+// ---------------------------------------------------------------------------
+
+export type AuthMethod = "password" | "oauth2";
+
+export type AccountProvider = "gmail" | "outlook" | "custom";
+
+export type Account = {
+	id: string; // uuid
+	provider: AccountProvider;
+	email: string; // visible identifier
+	host: string; // imap.gmail.com | outlook.office365.com
+	port: number; // 993
+	authMethod: AuthMethod;
+	// password: stored in keytar under `cleanmail:acct:<id>:password`
+	// oauth: stored in keytar under `cleanmail:acct:<id>:oauth` (JSON)
 };
 
-export type SaveImapConfigData = ImapConfig & {
-	password: string;
+export type OAuthTokens = {
+	accessToken: string;
+	refreshToken: string;
+	/** Expiry of the access token, epoch milliseconds */
+	expiresAt: number;
 };
+
+// ---------------------------------------------------------------------------
+// Persisted actions — now account-scoped
+// ---------------------------------------------------------------------------
 
 export type MoveActionData = {
+	accountId: string;
 	uid: number;
 	authorEmail: string;
 	fromMailboxPath: string;
@@ -18,6 +39,7 @@ export type MoveActionData = {
 };
 
 export type DeleteActionData = {
+	accountId: string;
 	uid: number;
 	authorEmail: string;
 	mailboxPath: string;
@@ -28,6 +50,7 @@ export type PersistedAction =
 	| { id: string; action: "DELETE"; createdAt: string; data: DeleteActionData };
 
 export type FetchEmailsData = {
+	accountId: string;
 	mailboxPath: string;
 	page?: number;
 	itemsPerPage?: number;
@@ -43,6 +66,7 @@ export type Email = {
 };
 
 export type FetchEmailDetail = {
+	accountId: string;
 	mailboxPath: string;
 	uid: number;
 };
@@ -69,12 +93,14 @@ export type Mailbox = {
 };
 
 export type MoveEmailData = {
+	accountId: string;
 	fromMailboxPath: string;
 	toMailboxPath: string;
 	uid: number;
 };
 
 export type DeleteEmailData = {
+	accountId: string;
 	mailboxPath: string;
 	uid: number;
 	trashMailboxPath?: string;
@@ -83,6 +109,7 @@ export type DeleteEmailData = {
 export type ApplyMoveActionData = {
 	/** Unique job id — matches the action's id */
 	jobId: string;
+	accountId: string;
 	authorEmail: string;
 	fromMailboxPath: string;
 	toMailboxPath: string;
@@ -91,6 +118,7 @@ export type ApplyMoveActionData = {
 export type ApplyDeleteActionData = {
 	/** Unique job id — matches the action's id */
 	jobId: string;
+	accountId: string;
 	authorEmail: string;
 	mailboxPath: string;
 };
@@ -104,15 +132,66 @@ export type ActionStatusUpdate = {
 	error?: string;
 };
 
+// ---------------------------------------------------------------------------
+// Account management RPCs
+// ---------------------------------------------------------------------------
+
+export type AddAccountPasswordParams = {
+	provider: AccountProvider;
+	email: string;
+	host: string;
+	port: number;
+	password: string;
+};
+
+export type BeginOAuthParams = {
+	provider: AccountProvider;
+	email?: string;
+};
+
+export type BeginOAuthResult = {
+	state: string;
+	authUrl: string;
+	error?: string;
+};
+
+export type CompleteOAuthParams = {
+	state: string;
+	code: string;
+	provider: AccountProvider;
+};
+
+/** Push message emitted by the bun callback server once OAuth finishes. */
+export type OAuthCompleteMessage =
+	| { account: Account }
+	| { error: string; provider?: AccountProvider };
+
 export type CleanMailRPC = {
 	bun: RPCSchema<{
 		requests: {
-			getImapConfig: {
+			listAccounts: {
+				// biome-ignore lint/suspicious/noConfusingVoidType: RPC request takes no parameters
 				params: void;
-				response: ImapConfig | null;
+				response: { accounts: Account[]; error?: string };
 			};
-			saveImapConfig: {
-				params: SaveImapConfigData;
+			getAccount: {
+				params: { id: string };
+				response: Account | null;
+			};
+			addAccountPassword: {
+				params: AddAccountPasswordParams;
+				response: { success: boolean; account?: Account; error?: string };
+			};
+			beginOAuth: {
+				params: BeginOAuthParams;
+				response: BeginOAuthResult;
+			};
+			completeOAuth: {
+				params: CompleteOAuthParams;
+				response: { success: boolean; account?: Account; error?: string };
+			};
+			removeAccount: {
+				params: { id: string };
 				response: { success: boolean; error?: string };
 			};
 			fetchEmails: {
@@ -124,11 +203,11 @@ export type CleanMailRPC = {
 				response: { email: EmailDetail | null; error?: string };
 			};
 			fetchMailboxes: {
-				params: void;
+				params: { accountId: string };
 				response: { mailboxes: Mailbox[]; error?: string };
 			};
 			createMailbox: {
-				params: { name: string };
+				params: { accountId: string; name: string };
 				response: { success: boolean; error?: string };
 			};
 			deleteEmail: {
@@ -140,7 +219,7 @@ export type CleanMailRPC = {
 				response: { success: boolean; error?: string };
 			};
 			getActions: {
-				params: void;
+				params: { accountId?: string };
 				response: { actions: PersistedAction[]; error?: string };
 			};
 			addAction: {
@@ -177,6 +256,8 @@ export type CleanMailRPC = {
 		messages: {
 			/** Sent by the bun process when a batch job changes status */
 			actionStatusUpdate: ActionStatusUpdate;
+			/** Sent by the bun process when an OAuth flow completes */
+			oauthComplete: OAuthCompleteMessage;
 		};
 	}>;
 };

@@ -11,12 +11,14 @@ import {
 import { TopBar } from "@/components/TopBar";
 
 type MailboxPageProps = {
+	accountId: string;
 	mailboxPath: string;
 	page: number;
 	onPageChange: (page: number) => void;
 };
 
 export function MailboxPage({
+	accountId,
 	mailboxPath,
 	page,
 	onPageChange,
@@ -29,7 +31,7 @@ export function MailboxPage({
 		isError,
 		error,
 		refetch,
-	} = useEmails(mailboxPath, { page });
+	} = useEmails(accountId, mailboxPath, { page });
 
 	const emails = emailsData?.emails ?? [];
 	const total = emailsData?.total ?? 0;
@@ -44,12 +46,12 @@ export function MailboxPage({
 		const totalPages = Math.ceil(total / EMAILS_PER_PAGE);
 
 		if (page > 1) {
-			prefetchEmails(queryClient, mailboxPath, { page: page - 1 });
+			prefetchEmails(queryClient, accountId, mailboxPath, { page: page - 1 });
 		}
 		if (page < totalPages) {
-			prefetchEmails(queryClient, mailboxPath, { page: page + 1 });
+			prefetchEmails(queryClient, accountId, mailboxPath, { page: page + 1 });
 		}
-	}, [queryClient, mailboxPath, page, total]);
+	}, [queryClient, accountId, mailboxPath, page, total]);
 
 	const mailboxDisplayName =
 		mailboxPath === "INBOX"
@@ -88,7 +90,11 @@ export function MailboxPage({
 							total={total}
 							onPageChange={onPageChange}
 						/>
-						<EmailTable emails={emails} mailboxPath={mailboxPath} />
+						<EmailTable
+							emails={emails}
+							accountId={accountId}
+							mailboxPath={mailboxPath}
+						/>
 					</>
 				)}
 			</main>

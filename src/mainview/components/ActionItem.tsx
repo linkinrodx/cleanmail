@@ -26,9 +26,9 @@ import { getMailboxShortLabel } from "../lib/mailbox-utils";
 
 export function getActionHref(action: EmailAction): string {
 	if (action.type === "move") {
-		return `/actions/${encodeURIComponent(action.fromMailboxPath)}/move/${encodeURIComponent(action.authorEmail)}/to/${encodeURIComponent(action.toMailboxPath)}`;
+		return `/account/${action.accountId}/actions/${encodeURIComponent(action.fromMailboxPath)}/move/${encodeURIComponent(action.authorEmail)}/to/${encodeURIComponent(action.toMailboxPath)}`;
 	}
-	return `/actions/${encodeURIComponent(action.mailboxPath)}/delete/${encodeURIComponent(action.authorEmail)}`;
+	return `/account/${action.accountId}/actions/${encodeURIComponent(action.mailboxPath)}/delete/${encodeURIComponent(action.authorEmail)}`;
 }
 
 function getActionTitle(action: EmailAction): string {
@@ -61,8 +61,8 @@ export function ActionItem({ action, currentHref, jobId }: ActionItemProps) {
 	const jobState = jobId ? jobs[jobId] : undefined;
 
 	const { getId } = useActionsContext();
-	const applyMove = useApplyMoveAction();
-	const applyDelete = useApplyDeleteAction();
+	const applyMove = useApplyMoveAction(action.accountId);
+	const applyDelete = useApplyDeleteAction(action.accountId);
 	const removeAction = useRemoveAction();
 
 	// Decide which icon to show based on job state
@@ -106,6 +106,7 @@ export function ActionItem({ action, currentHref, jobId }: ActionItemProps) {
 		if (action.type === "move") {
 			applyMove.mutate({
 				jobId: resolvedId,
+				accountId: action.accountId,
 				authorEmail: action.authorEmail,
 				fromMailboxPath: action.fromMailboxPath,
 				toMailboxPath: action.toMailboxPath,
@@ -113,6 +114,7 @@ export function ActionItem({ action, currentHref, jobId }: ActionItemProps) {
 		} else {
 			applyDelete.mutate({
 				jobId: resolvedId,
+				accountId: action.accountId,
 				authorEmail: action.authorEmail,
 				mailboxPath: action.mailboxPath,
 			});

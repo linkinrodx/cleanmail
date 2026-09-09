@@ -5,6 +5,7 @@ import { fetchEmails } from "@/lib/rpc";
 export const EMAILS_PER_PAGE = 20;
 
 export function useEmails(
+	accountId: string,
 	mailboxPath: string,
 	filters: { page?: number; itemsPerPage?: number; from?: string } = {},
 ) {
@@ -12,13 +13,16 @@ export function useEmails(
 	const resolvedFilters = { page, itemsPerPage, from };
 
 	return useQuery({
-		...emailKeys.byMailbox(mailboxPath)._ctx.filtered(resolvedFilters),
-		queryFn: () => fetchEmails({ mailboxPath, ...resolvedFilters }),
+		...emailKeys
+			.byAccountAndMailbox(accountId, mailboxPath)
+			._ctx.filtered(resolvedFilters),
+		queryFn: () => fetchEmails({ accountId, mailboxPath, ...resolvedFilters }),
 	});
 }
 
 export function prefetchEmails(
 	queryClient: QueryClient,
+	accountId: string,
 	mailboxPath: string,
 	filters: { page?: number; itemsPerPage?: number; from?: string } = {},
 ) {
@@ -26,7 +30,9 @@ export function prefetchEmails(
 	const resolvedFilters = { page, itemsPerPage, from };
 
 	return queryClient.prefetchQuery({
-		...emailKeys.byMailbox(mailboxPath)._ctx.filtered(resolvedFilters),
-		queryFn: () => fetchEmails({ mailboxPath, ...resolvedFilters }),
+		...emailKeys
+			.byAccountAndMailbox(accountId, mailboxPath)
+			._ctx.filtered(resolvedFilters),
+		queryFn: () => fetchEmails({ accountId, mailboxPath, ...resolvedFilters }),
 	});
 }
