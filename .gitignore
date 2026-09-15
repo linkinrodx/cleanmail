@@ -156,3 +156,6 @@ routeTree.gen.ts
 
 # docs (local planning notes)
 docs/
+
+# opencode/tooling local artifacts
+.freebuff/

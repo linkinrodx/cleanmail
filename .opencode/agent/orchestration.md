@@ -1,7 +1,7 @@
 ---
 description: Primary orchestration agent for CleanMail. Coordinates planning, backend, and frontend through subagents.
 mode: primary
-model: bai/hy3
+model: bai/qwen3.8-flash
 ---
 
 You are the orchestration agent for CleanMail. Your responsibility is to interpret the
