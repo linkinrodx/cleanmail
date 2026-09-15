@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { MailboxSidebar } from "@/components/MailboxSidebar";
+import { ActivityIndicator } from "@/components/ActivityIndicator";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -48,6 +49,7 @@ function RootLayout() {
 							</SidebarInset>
 						</SidebarProvider>
 						<Toaster />
+						<ActivityIndicator />
 					</ApplyActionContextProvider>
 				</ActionsContextProvider>
 			</DragContextProvider>

@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { InfoIcon } from "lucide-react";
 import { SuggestionRow } from "@/components/SuggestionRow";
 import { TopBar } from "@/components/TopBar";
 import { Button } from "@/components/ui/button";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useSuggestions } from "@/hooks/queries/useSuggestions";
 
 // Buckets mirror the "100+ / 50+ / 20+ / 10+ / 5+" volume tiers used in the
@@ -137,6 +131,7 @@ export function SuggestionsPage({ accountId }: { accountId: string }) {
 				title="Suggestions"
 				isLoading={isScanning}
 				refetch={() => startScan(true)}
+				description="Suggestions groups messages from the same sender that you rarely open (newsletters, promotions, notifications) and recommends a cleanup action for each. Apply one to clear all of that sender's messages, or open a suggestion to review them first. Nothing is changed until you act."
 			/>
 
 			<main
@@ -168,23 +163,6 @@ export function SuggestionsPage({ accountId }: { accountId: string }) {
 					</div>
 				) : (
 					<>
-						{/* About this page */}
-						<div className="mx-auto flex w-full max-w-3xl justify-end px-4 pt-2">
-							<Tooltip>
-								<TooltipTrigger className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring">
-									<InfoIcon className="size-3.5" />
-									About
-								</TooltipTrigger>
-								<TooltipContent>
-									Suggestions groups messages from the same sender that you
-									rarely open (newsletters, promotions, notifications) and
-									recommends a cleanup action for each. Apply one to clear all
-									of that sender's messages, or open a suggestion to review them
-									first. Nothing is changed until you act.
-								</TooltipContent>
-							</Tooltip>
-						</div>
-
 						{/* Cached-at row */}
 						{cachedAt ? (
 							<div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 py-2">
