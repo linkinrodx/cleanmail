@@ -45,9 +45,10 @@ export function buildColumns(
 			header: "Subject",
 			cell: ({ row, getValue }) => (
 				<span
-					className={
+					title={String(getValue())}
+					className={`block max-w-2xl truncate ${
 						row.original.seen ? "text-muted-foreground" : "font-medium"
-					}
+					}`}
 				>
 					{String(getValue())}
 				</span>

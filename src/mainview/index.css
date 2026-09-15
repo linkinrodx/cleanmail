@@ -120,11 +120,3 @@
 		@apply font-sans;
 	}
 }
-
-.titlebar-drag {
-	-webkit-app-region: drag;
-}
-
-.titlebar-no-drag {
-	-webkit-app-region: no-drag;
-}

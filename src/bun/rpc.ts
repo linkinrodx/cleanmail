@@ -15,6 +15,14 @@ import {
 	rpcGetActions,
 	rpcRemoveAction,
 } from "./actions";
+import { rpcMarkEmailRead, rpcMarkSenderRead, rpcSetEmailFlag } from "./flags";
+import {
+	rpcCancelGroupScan,
+	rpcGetSuggestions,
+	rpcInvalidateSuggestion,
+	rpcStartGroupScan,
+	setScanNotifier,
+} from "./groupScan";
 import {
 	rpcCreateMailbox,
 	rpcDeleteEmail,
@@ -24,10 +32,13 @@ import {
 	rpcMoveEmail,
 } from "./imap";
 import { setNotifyWebview } from "./jobs";
-import { getMainWindow } from "./window";
+import { rpcFetchSenderEmails } from "./senderEmails";
 
 export const rpc = BrowserView.defineRPC<CleanMailRPC>({
-	maxRequestTime: 30 * 1000,
+	// Suggestions scans run as a background job (see groupScan.ts) — they no
+	// longer block an RPC. Keep generous headroom for the remaining IMAP
+	// batches so they don't time out.
+	maxRequestTime: 120 * 1000,
 	handlers: {
 		requests: {
 			listAccounts: rpcListAccounts,
@@ -38,6 +49,14 @@ export const rpc = BrowserView.defineRPC<CleanMailRPC>({
 			removeAccount: rpcRemoveAccount,
 			fetchEmails: rpcFetchEmails,
 			fetchEmailDetail: rpcFetchEmailDetail,
+			fetchSenderEmails: rpcFetchSenderEmails,
+			getSuggestions: rpcGetSuggestions,
+			startGroupScan: rpcStartGroupScan,
+			cancelGroupScan: rpcCancelGroupScan,
+			invalidateSuggestion: rpcInvalidateSuggestion,
+			markEmailRead: rpcMarkEmailRead,
+			setEmailFlag: rpcSetEmailFlag,
+			markSenderRead: rpcMarkSenderRead,
 			fetchMailboxes: rpcFetchMailboxes,
 			createMailbox: rpcCreateMailbox,
 			moveEmail: rpcMoveEmail,
@@ -47,33 +66,9 @@ export const rpc = BrowserView.defineRPC<CleanMailRPC>({
 			removeAction: rpcRemoveAction,
 			applyMoveAction: rpcApplyMoveAction,
 			applyDeleteAction: rpcApplyDeleteAction,
-			getWindowState: async () => {
-				const w = getMainWindow();
-				return {
-					isMaximized: w.isMaximized(),
-					isMinimized: w.isMinimized(),
-					isFullScreen: w.isFullScreen(),
-				};
-			},
-			minimizeWindow: async () => {
-				getMainWindow().minimize();
-				return { success: true };
-			},
-			toggleMaximizeWindow: async () => {
-				const w = getMainWindow();
-				if (w.isMaximized()) {
-					w.unmaximize();
-				} else {
-					w.maximize();
-				}
-				return { success: true, isMaximized: w.isMaximized() };
-			},
-			closeWindow: async () => {
-				getMainWindow().close();
-				return { success: true };
-			},
 		},
 	},
 });
 
 setNotifyWebview((update) => rpc.send.actionStatusUpdate(update));
+setScanNotifier((p) => rpc.send.groupScanProgress(p));

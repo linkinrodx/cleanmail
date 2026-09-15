@@ -3,7 +3,6 @@ import { dirname, join } from "node:path";
 import { BrowserWindow, Updater } from "electrobun/bun";
 import { debugLog } from "./debug";
 import { rpc } from "./rpc";
-import { setMainWindow } from "./window";
 
 // Electrobun's bun runtime does not auto-load .env, so we load it explicitly
 // before any code reads Bun.env (OAuth client IDs, callback port, etc.).
@@ -34,19 +33,20 @@ const url = await getMainViewUrl();
 const win = new BrowserWindow({
 	title: "CleanMail",
 	url,
-	titleBarStyle: "hiddenInset",
-	frame: { width: 1200, height: 800 },
+	titleBarStyle: "default",
+	frame: { x: 0, y: 0, width: 1200, height: 800 },
 	rpc,
 });
 
-setMainWindow(win);
-
-win.on("resize", () => {
-	rpc.send.windowStateChanged({
-		isMaximized: win.isMaximized(),
-		isMinimized: win.isMinimized(),
-		isFullScreen: win.isFullScreen(),
-	});
+// Start maximized. With the native OS frame, `maximize()` sizes to the work
+// area, so the Windows taskbar stays visible. Re-apply once after the window is
+// ready so it uses correct (post-DPI) work-area metrics.
+win.maximize();
+win.webview.on("dom-ready", () => {
+	if (win.isMaximized()) {
+		win.unmaximize();
+		win.maximize();
+	}
 });
 
 console.log("Cleanmail started!");

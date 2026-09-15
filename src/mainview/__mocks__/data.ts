@@ -87,6 +87,7 @@ function generateEmails(_mailboxPath: string, count: number): Email[] {
 	return Array.from({ length: count }, (_, i) => {
 		const uid = i + 1;
 		const seen = faker.datatype.boolean({ probability: 0.7 });
+		const flagged = faker.datatype.boolean({ probability: 0.1 });
 		const date = faker.date
 			.between({ from: "2024-01-01", to: "2025-12-31" })
 			.toISOString();
@@ -100,6 +101,7 @@ function generateEmails(_mailboxPath: string, count: number): Email[] {
 			}),
 			date,
 			seen,
+			flagged,
 		};
 	});
 }
@@ -138,6 +140,7 @@ export function generateEmailDetail(
 		from: email.from,
 		date: email.date,
 		seen: email.seen,
+		flagged: email.flagged,
 		htmlBody: `<html><body><p>${paragraphs.replace(/\n\n/g, "</p><p>")}</p></body></html>`,
 		textBody: paragraphs,
 	};

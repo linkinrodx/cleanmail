@@ -60,6 +60,49 @@ export async function createImapClient(account: Account): Promise<ImapFlow> {
 	});
 }
 
+/**
+ * Max UIDs requested in a single FETCH command. Outlook/Office365 returns a
+ * tagged NO/BAD (imapflow: "Command failed") when the sequence list is very
+ * long, so bulk envelope reads are chunked to stay under that limit.
+ */
+export const ENVELOPE_FETCH_BATCH = 500;
+
+/**
+ * Resolve the exact set of UIDs whose first From address equals `authorEmail`
+ * (case-insensitive). Uses an IMAP `FROM` search only as a cheap candidate
+ * pre-filter, then verifies each candidate's envelope. Avoids substring
+ * over-matches where one full address is contained in another. Call while the
+ * mailbox lock is held.
+ */
+export async function findUidsByExactSender(
+	client: ImapFlow,
+	authorEmail: string,
+): Promise<number[]> {
+	const candidates = (await client.search(
+		{ from: authorEmail },
+		{ uid: true },
+	)) as number[];
+	if (candidates.length === 0) {
+		return [];
+	}
+	const target = authorEmail.toLowerCase();
+	const exact: number[] = [];
+	for (let i = 0; i < candidates.length; i += ENVELOPE_FETCH_BATCH) {
+		const batch = candidates.slice(i, i + ENVELOPE_FETCH_BATCH);
+		for await (const msg of client.fetch(
+			{ uid: batch.join(",") },
+			{ uid: true, envelope: true },
+			{ uid: true },
+		)) {
+			const addr = (msg.envelope?.from?.[0]?.address ?? "").toLowerCase();
+			if (addr === target) {
+				exact.push(msg.uid as number);
+			}
+		}
+	}
+	return exact;
+}
+
 export async function countEmailsFrom({
 	accountId,
 	mailboxPath,
@@ -82,11 +125,7 @@ export async function countEmailsFrom({
 		const lock = await client.getMailboxLock(mailboxPath);
 		let count = 0;
 		try {
-			const uids = (await client.search(
-				{ from: authorEmail },
-				{ uid: true },
-			)) as number[];
-			count = uids.length;
+			count = (await findUidsByExactSender(client, authorEmail)).length;
 		} finally {
 			lock.release();
 		}
@@ -185,6 +224,7 @@ export async function rpcFetchEmails({
 							from: fromStr,
 							date: envelope.date ? envelope.date.toISOString() : "Unknown",
 							seen: msg.flags?.has("\\Seen") ?? false,
+							flagged: msg.flags?.has("\\Flagged") ?? false,
 						});
 					}
 
@@ -337,6 +377,7 @@ export async function rpcFetchEmailDetail({
 						from: fromStr,
 						date: envelope.date ? envelope.date.toISOString() : "Unknown",
 						seen: msg.flags?.has("\\Seen") ?? false,
+						flagged: msg.flags?.has("\\Flagged") ?? false,
 						htmlBody,
 						textBody,
 					};

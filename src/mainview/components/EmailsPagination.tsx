@@ -23,26 +23,24 @@ const getPageNumbers = (
 	page: number,
 	totalPages: number,
 ): (number | "ellipsis")[] => {
-	if (totalPages <= 7) {
+	if (totalPages <= 11) {
 		return Array.from({ length: totalPages }, (_, i) => i + 1);
 	}
 
 	const pages: (number | "ellipsis")[] = [1];
 
-	if (page > 3) {
+	const left = Math.max(2, page - 2);
+	const right = Math.min(totalPages - 1, page + 2);
+
+	if (left > 2) {
 		pages.push("ellipsis");
 	}
-
-	const start = Math.max(2, page - 1);
-	const end = Math.min(totalPages - 1, page + 1);
-	for (let i = start; i <= end; i++) {
+	for (let i = left; i <= right; i++) {
 		pages.push(i);
 	}
-
-	if (page < totalPages - 2) {
+	if (right < totalPages - 1) {
 		pages.push("ellipsis");
 	}
-
 	pages.push(totalPages);
 
 	return pages;

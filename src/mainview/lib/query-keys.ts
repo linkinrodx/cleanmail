@@ -15,6 +15,13 @@ export const emailKeys = createQueryKeys("emails", {
 			}) => ({
 				queryKey: [filters],
 			}),
+			sender: (filters: {
+				authorEmail: string;
+				page?: number;
+				itemsPerPage?: number;
+			}) => ({
+				queryKey: ["sender", filters],
+			}),
 			detail: (uid: number) => ({
 				queryKey: [uid],
 			}),
@@ -25,6 +32,12 @@ export const emailKeys = createQueryKeys("emails", {
 export const mailboxKeys = createQueryKeys("mailboxes", {
 	byAccount: (accountId: string) => ({
 		queryKey: [accountId],
+	}),
+});
+
+export const groupKeys = createQueryKeys("groups", {
+	byAccountAndMailbox: (accountId: string, path: string) => ({
+		queryKey: [accountId, path],
 	}),
 });
 
@@ -55,5 +68,23 @@ export const mutationKeys = {
 		accountId,
 		fromMailboxPath,
 		"move",
+	],
+	markEmailRead: (accountId: string, mailboxPath: string) => [
+		"emails",
+		accountId,
+		mailboxPath,
+		"mark-read",
+	],
+	setEmailFlag: (accountId: string, mailboxPath: string) => [
+		"emails",
+		accountId,
+		mailboxPath,
+		"set-flag",
+	],
+	markSenderRead: (accountId: string, mailboxPath: string) => [
+		"emails",
+		accountId,
+		mailboxPath,
+		"mark-sender-read",
 	],
 };

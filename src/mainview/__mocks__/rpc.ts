@@ -8,7 +8,9 @@ import {
 	mockFetchEmailDetail,
 	mockFetchEmails,
 	mockFetchMailboxes,
+	mockFetchSenderEmails,
 	mockGetActions,
+	mockGroupEmails,
 } from "./handlers";
 
 // ---------------------------------------------------------------------------
@@ -17,11 +19,14 @@ import {
 
 type ActionStatusListener = (update: ActionStatusUpdate) => void;
 type OAuthCompleteListener = (msg: OAuthCompleteMessage) => void;
+type GroupScanListener = (progress: unknown) => void;
 
 export function addActionStatusListener(_listener: ActionStatusListener) {}
 export function removeActionStatusListener(_listener: ActionStatusListener) {}
 export function addOAuthCompleteListener(_listener: OAuthCompleteListener) {}
 export function removeOAuthCompleteListener(_listener: OAuthCompleteListener) {}
+export function addGroupScanListener(_listener: GroupScanListener) {}
+export function removeGroupScanListener(_listener: GroupScanListener) {}
 
 // electroview is not needed in mock mode (no Electrobun process).
 export const electroview = null;
@@ -43,8 +48,12 @@ export const removeAccount = async () => ({ success: true });
 
 export const fetchEmails = mockFetchEmails;
 export const fetchEmailDetail = mockFetchEmailDetail;
+export const fetchSenderEmails = mockFetchSenderEmails;
 export const fetchMailboxes = mockFetchMailboxes;
 export const getActions = mockGetActions;
+export const getSuggestions = mockGroupEmails;
+export const startGroupScan = async () => ({ started: false });
+export const cancelGroupScan = async () => ({ cancelled: true });
 
 // ---------------------------------------------------------------------------
 // No-op stubs for write operations
@@ -62,3 +71,7 @@ export const addAction = noop;
 export const removeAction = noop;
 export const applyMoveAction = noopQueued;
 export const applyDeleteAction = noopQueued;
+export const markEmailRead = noop;
+export const setEmailFlag = noop;
+export const markSenderRead = async () => ({ success: true, updatedCount: 0 });
+export const invalidateSuggestion = noop;

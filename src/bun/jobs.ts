@@ -1,7 +1,7 @@
 import type { ImapFlow } from "imapflow";
 import type { ActionStatusUpdate } from "../shared/rpc-types";
-import { createImapClient } from "./imap";
-import { getAccountById } from "./storage";
+import { createImapClient, findUidsByExactSender } from "./imap";
+import { getAccountById, removeSenderFromSuggestionCache } from "./storage";
 
 type ApplyMoveJob = {
 	type: "move";
@@ -43,10 +43,7 @@ export function notifyWebview(update: ActionStatusUpdate) {
 const processMoveJob = async (client: ImapFlow, job: ApplyMoveJob) => {
 	const lock = await client.getMailboxLock(job.fromMailboxPath);
 	try {
-		const uids = (await client.search(
-			{ from: job.authorEmail },
-			{ uid: true },
-		)) as number[];
+		const uids = await findUidsByExactSender(client, job.authorEmail);
 
 		if (uids.length > 0) {
 			await client.messageMove({ uid: uids.join(",") }, job.toMailboxPath, {
@@ -74,10 +71,7 @@ const processDeleteJob = async (client: ImapFlow, job: ApplyDeleteJob) => {
 
 	const lock = await client.getMailboxLock(job.mailboxPath);
 	try {
-		const uids = (await client.search(
-			{ from: job.authorEmail },
-			{ uid: true },
-		)) as number[];
+		const uids = await findUidsByExactSender(client, job.authorEmail);
 
 		if (uids.length > 0) {
 			if (trashMailboxPath && !alreadyInTrash) {
@@ -119,6 +113,16 @@ export async function processJob(job: ApplyJob) {
 
 		await client.logout();
 		notifyWebview({ jobId: job.jobId, status: "success" });
+
+		// Keep the suggestions cache consistent regardless of which screen is
+		// open: drop the cleared sender so its suggestion does not linger.
+		const suggestionMailbox =
+			job.type === "move" ? job.fromMailboxPath : job.mailboxPath;
+		await removeSenderFromSuggestionCache(
+			job.accountId,
+			suggestionMailbox,
+			job.authorEmail,
+		);
 	} catch (err) {
 		try {
 			await client?.logout();

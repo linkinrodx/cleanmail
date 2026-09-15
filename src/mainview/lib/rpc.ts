@@ -2,17 +2,17 @@ import { Electroview } from "electrobun/view";
 import type {
 	ActionStatusUpdate,
 	CleanMailRPC,
+	GroupScanProgress,
 	OAuthCompleteMessage,
-	WindowState,
 } from "../../shared/rpc-types";
 
 type ActionStatusListener = (update: ActionStatusUpdate) => void;
 type OAuthCompleteListener = (msg: OAuthCompleteMessage) => void;
-type WindowStateListener = (state: WindowState) => void;
+type GroupScanListener = (progress: GroupScanProgress) => void;
 
 const actionStatusListeners = new Set<ActionStatusListener>();
 const oauthCompleteListeners = new Set<OAuthCompleteListener>();
-const windowStateListeners = new Set<WindowStateListener>();
+const groupScanListeners = new Set<GroupScanListener>();
 
 export function addActionStatusListener(listener: ActionStatusListener) {
 	actionStatusListeners.add(listener);
@@ -30,16 +30,16 @@ export function removeOAuthCompleteListener(listener: OAuthCompleteListener) {
 	oauthCompleteListeners.delete(listener);
 }
 
-export function addWindowStateListener(listener: WindowStateListener) {
-	windowStateListeners.add(listener);
+export function addGroupScanListener(listener: GroupScanListener) {
+	groupScanListeners.add(listener);
 }
 
-export function removeWindowStateListener(listener: WindowStateListener) {
-	windowStateListeners.delete(listener);
+export function removeGroupScanListener(listener: GroupScanListener) {
+	groupScanListeners.delete(listener);
 }
 
 const rpc = Electroview.defineRPC<CleanMailRPC>({
-	maxRequestTime: 30 * 1000,
+	maxRequestTime: 120 * 1000,
 	handlers: {
 		requests: {},
 		messages: {
@@ -53,9 +53,9 @@ const rpc = Electroview.defineRPC<CleanMailRPC>({
 					listener(msg);
 				}
 			},
-			windowStateChanged: (state) => {
-				for (const listener of windowStateListeners) {
-					listener(state);
+			groupScanProgress: (progress) => {
+				for (const listener of groupScanListeners) {
+					listener(progress);
 				}
 			},
 		},
@@ -73,6 +73,7 @@ export const removeAccount = rpc.request.removeAccount;
 
 export const fetchEmails = rpc.request.fetchEmails;
 export const fetchEmailDetail = rpc.request.fetchEmailDetail;
+export const fetchSenderEmails = rpc.request.fetchSenderEmails;
 export const fetchMailboxes = (accountId: string) =>
 	rpc.request.fetchMailboxes({ accountId });
 export const createMailbox = ({
@@ -85,6 +86,9 @@ export const createMailbox = ({
 
 export const moveEmail = rpc.request.moveEmail;
 export const deleteEmail = rpc.request.deleteEmail;
+export const markEmailRead = rpc.request.markEmailRead;
+export const setEmailFlag = rpc.request.setEmailFlag;
+export const markSenderRead = rpc.request.markSenderRead;
 
 export const getActions = (accountId?: string) =>
 	rpc.request.getActions({ accountId });
@@ -94,7 +98,7 @@ export const removeAction = (id: string) => rpc.request.removeAction({ id });
 export const applyMoveAction = rpc.request.applyMoveAction;
 export const applyDeleteAction = rpc.request.applyDeleteAction;
 
-export const getWindowState = rpc.request.getWindowState;
-export const minimizeWindow = rpc.request.minimizeWindow;
-export const toggleMaximizeWindow = rpc.request.toggleMaximizeWindow;
-export const closeWindow = rpc.request.closeWindow;
+export const getSuggestions = rpc.request.getSuggestions;
+export const startGroupScan = rpc.request.startGroupScan;
+export const cancelGroupScan = rpc.request.cancelGroupScan;
+export const invalidateSuggestion = rpc.request.invalidateSuggestion;

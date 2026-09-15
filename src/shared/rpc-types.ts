@@ -63,6 +63,7 @@ export type Email = {
 	from: string;
 	date: string;
 	seen: boolean;
+	flagged: boolean;
 };
 
 export type FetchEmailDetail = {
@@ -71,16 +72,105 @@ export type FetchEmailDetail = {
 	uid: number;
 };
 
+export type FetchSenderEmailsData = {
+	accountId: string;
+	mailboxPath: string;
+	authorEmail: string;
+	page?: number;
+	itemsPerPage?: number;
+};
+
 export type EmailDetail = {
 	uid: number;
 	subject: string;
 	from: string;
 	date: string;
 	seen: boolean;
+	flagged: boolean;
 	/** HTML body if the email has an HTML part, otherwise null */
 	htmlBody: string | null;
 	/** Plain-text body */
 	textBody: string | null;
+};
+
+// ---------------------------------------------------------------------------
+// Suggestions — sender grouping with recommended actions
+// ---------------------------------------------------------------------------
+
+export type RecommendedAction = "ARCHIVE" | "TRASH" | "DELETE" | "MARK_READ";
+
+export type SenderGroup = {
+	authorEmail: string;
+	count: number;
+	lastDate: string;
+	sampleSubjects: string[];
+	recommendedAction: RecommendedAction;
+};
+
+export type GroupEmailsParams = {
+	accountId: string;
+	mailboxPath: string;
+	minCount?: number;
+	limit?: number;
+	scanCap?: number;
+};
+
+export type MarkEmailReadData = {
+	accountId: string;
+	mailboxPath: string;
+	uid: number;
+	/** true → add \Seen; false → remove \Seen */
+	seen: boolean;
+};
+
+export type SetEmailFlagData = {
+	accountId: string;
+	mailboxPath: string;
+	uid: number;
+	/** true → add \Flagged; false → remove \Flagged */
+	flagged: boolean;
+};
+
+export type MarkSenderReadData = {
+	accountId: string;
+	mailboxPath: string;
+	/**
+	 * Full sender address. The backend narrows with an IMAP `FROM` search but then
+	 * filters to an exact, case-insensitive match on the message's
+	 * `envelope.from[0].address`, so only this exact sender is marked as read.
+	 */
+	authorEmail: string;
+};
+
+// ---------------------------------------------------------------------------
+// Suggestion scan (async background job with progress + cache)
+// ---------------------------------------------------------------------------
+
+export type GroupScanStatus = "idle" | "scanning" | "ready" | "error";
+
+export type GroupScanPhase = "search" | "envelopes" | "done";
+
+/**
+ * Progress pushed bun → webview while a suggestion scan runs. Terminal
+ * states (`ready` / `error`) also carry the final `groups` / `error`.
+ */
+export type GroupScanProgress = {
+	accountId: string;
+	mailboxPath: string;
+	status: GroupScanStatus;
+	phase: GroupScanPhase;
+	/** Messages scanned so far. */
+	scanned: number;
+	/** Total messages in the scan window (0 until known). */
+	total: number;
+	/** Distinct senders discovered so far. */
+	sendersFound: number;
+	/** Final groups (populated on `ready`). */
+	groups?: SenderGroup[];
+	/** Cache write timestamp (ISO) when `ready`. */
+	cachedAt?: string;
+	/** Error detail when `status === "error"`. */
+	error?: string;
 };
 
 export type Mailbox = {
@@ -166,16 +256,6 @@ export type OAuthCompleteMessage =
 	| { account: Account }
 	| { error: string; provider?: AccountProvider };
 
-// ---------------------------------------------------------------------------
-// Window state (custom title-bar)
-// ---------------------------------------------------------------------------
-
-export type WindowState = {
-	isMaximized: boolean;
-	isMinimized: boolean;
-	isFullScreen: boolean;
-};
-
 export type CleanMailRPC = {
 	bun: RPCSchema<{
 		requests: {
@@ -208,9 +288,50 @@ export type CleanMailRPC = {
 				params: FetchEmailsData;
 				response: { emails: Email[]; total: number; error?: string };
 			};
+			fetchSenderEmails: {
+				params: FetchSenderEmailsData;
+				response: { emails: Email[]; total: number; error?: string };
+			};
 			fetchEmailDetail: {
 				params: FetchEmailDetail;
 				response: { email: EmailDetail | null; error?: string };
+			};
+			getSuggestions: {
+				params: { accountId: string; mailboxPath: string };
+				response: {
+					groups: SenderGroup[];
+					status: GroupScanStatus;
+					cachedAt: string | null;
+					error?: string;
+				};
+			};
+			startGroupScan: {
+				params: { accountId: string; mailboxPath: string; force?: boolean };
+				response: {
+					started: boolean;
+					alreadyRunning?: boolean;
+					error?: string;
+				};
+			};
+			cancelGroupScan: {
+				params: { accountId: string; mailboxPath: string };
+				response: { cancelled: boolean };
+			};
+			invalidateSuggestion: {
+				params: { accountId: string; mailboxPath: string; authorEmail: string };
+				response: { success: boolean; error?: string };
+			};
+			markEmailRead: {
+				params: MarkEmailReadData;
+				response: { success: boolean; error?: string };
+			};
+			setEmailFlag: {
+				params: SetEmailFlagData;
+				response: { success: boolean; error?: string };
+			};
+			markSenderRead: {
+				params: MarkSenderReadData;
+				response: { success: boolean; updatedCount?: number; error?: string };
 			};
 			fetchMailboxes: {
 				params: { accountId: string };
@@ -258,26 +379,6 @@ export type CleanMailRPC = {
 				params: ApplyDeleteActionData;
 				response: { queued: boolean; error?: string };
 			};
-			getWindowState: {
-				// biome-ignore lint/suspicious/noConfusingVoidType: RPC request takes no parameters
-				params: void;
-				response: WindowState;
-			};
-			minimizeWindow: {
-				// biome-ignore lint/suspicious/noConfusingVoidType: RPC request takes no parameters
-				params: void;
-				response: { success: boolean };
-			};
-			toggleMaximizeWindow: {
-				// biome-ignore lint/suspicious/noConfusingVoidType: RPC request takes no parameters
-				params: void;
-				response: { success: boolean; isMaximized: boolean };
-			};
-			closeWindow: {
-				// biome-ignore lint/suspicious/noConfusingVoidType: RPC request takes no parameters
-				params: void;
-				response: { success: boolean };
-			};
 		};
 		messages: Record<never, never>;
 	}>;
@@ -288,8 +389,8 @@ export type CleanMailRPC = {
 			actionStatusUpdate: ActionStatusUpdate;
 			/** Sent by the bun process when an OAuth flow completes */
 			oauthComplete: OAuthCompleteMessage;
-			/** Sent by the bun process when the window state changes */
-			windowStateChanged: WindowState;
+			/** Sent by the bun process as a suggestion scan progresses/completes */
+			groupScanProgress: GroupScanProgress;
 		};
 	}>;
 };

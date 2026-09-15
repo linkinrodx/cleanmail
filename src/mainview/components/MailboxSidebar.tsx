@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { PlusIcon, UsersIcon } from "lucide-react";
+import { LightbulbIcon, PlusIcon, UsersIcon } from "lucide-react";
 import { useState } from "react";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -141,6 +141,22 @@ export function MailboxSidebar() {
 								<span>Accounts</span>
 							</SidebarMenuButton>
 						</SidebarMenuItem>
+						{currentAccountId ? (
+							<SidebarMenuItem>
+								<SidebarMenuButton
+									render={
+										<Link
+											to="/account/$accountId/suggestions"
+											params={{ accountId: currentAccountId }}
+											activeProps={{ className: "bg-muted" }}
+										/>
+									}
+								>
+									<LightbulbIcon />
+									<span>Suggestions</span>
+								</SidebarMenuButton>
+							</SidebarMenuItem>
+						) : null}
 						<SidebarMenuItem>
 							<SidebarMenuButton onClick={() => setDialogOpen(true)}>
 								<PlusIcon />

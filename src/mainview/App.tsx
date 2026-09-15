@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 
-import { TitleBar } from "@/components/TitleBar";
+import { SuggestionJobWatcher } from "@/components/SuggestionJobWatcher";
 
 import { queryClient } from "./lib/query-client";
 import { routeTree } from "./routeTree.gen";
@@ -18,11 +18,9 @@ declare module "@tanstack/react-router" {
 export default function App() {
 	return (
 		<QueryClientProvider client={queryClient}>
-			<div className="flex h-screen flex-col">
-				<TitleBar />
-				<div className="flex-1 overflow-hidden">
-					<RouterProvider router={router} />
-				</div>
+			<SuggestionJobWatcher />
+			<div className="h-screen w-full overflow-hidden">
+				<RouterProvider router={router} />
 			</div>
 			<ReactQueryDevtools />
 		</QueryClientProvider>

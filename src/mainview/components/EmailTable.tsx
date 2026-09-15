@@ -169,7 +169,7 @@ export function EmailTable({
 					{table.getHeaderGroups().map((headerGroup) => (
 						<TableRow key={headerGroup.id}>
 							{headerGroup.headers.map((header) => (
-							<TableHead key={header.id} style={{ width: header.getSize() }}>
+								<TableHead key={header.id} style={{ width: header.getSize() }}>
 									{flexRender(
 										header.column.columnDef.header,
 										header.getContext(),

@@ -1,4 +1,6 @@
-import { Loader2Icon } from "lucide-react";
+import { Loader2Icon, MailIcon, MailOpenIcon, StarIcon } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -6,6 +8,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { useMarkEmailRead } from "@/hooks/mutations/useMarkEmailRead";
+import { useSetEmailFlag } from "@/hooks/mutations/useSetEmailFlag";
 import { useEmailDetail } from "@/hooks/queries/useEmailDetail";
 import { formatDate } from "@/lib/format";
 
@@ -33,10 +37,13 @@ export function EmailDialog({
 
 	const email = data?.email ?? null;
 
+	const markReadMut = useMarkEmailRead(accountId, mailboxPath);
+	const flagMut = useSetEmailFlag(accountId, mailboxPath);
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
-				className="flex max-h-[85vh] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0"
+				className="flex max-h-[92vh] w-full max-w-5xl flex-col gap-0 overflow-hidden p-0"
 				showCloseButton
 			>
 				<DialogHeader className="shrink-0 border-b px-6 py-4 pr-12">
@@ -79,7 +86,7 @@ export function EmailDialog({
 							<iframe
 								srcDoc={email.htmlBody}
 								sandbox="allow-same-origin"
-								className="h-full min-h-[40vh] w-full border-none"
+								className="h-full min-h-[55vh] w-full border-none"
 								title="Email content"
 							/>
 						) : (
@@ -89,7 +96,64 @@ export function EmailDialog({
 						))}
 				</div>
 
-				<DialogFooter showCloseButton className="shrink-0" />
+				<DialogFooter showCloseButton className="shrink-0">
+					{email && (
+						<>
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={markReadMut.isPending}
+								onClick={() => {
+									markReadMut.mutate(
+										{ uid: email.uid, seen: !email.seen },
+										{
+											onSuccess: () => {
+												toast.success(
+													email.seen ? "Marked as unread" : "Marked as read",
+												);
+											},
+											onError: (err) =>
+												toast.error(
+													err instanceof Error ? err.message : String(err),
+												),
+										},
+									);
+								}}
+							>
+								{email.seen ? (
+									<MailOpenIcon className="mr-1.5 size-4" />
+								) : (
+									<MailIcon className="mr-1.5 size-4" />
+								)}
+								{email.seen ? "Mark unread" : "Mark read"}
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={flagMut.isPending}
+								onClick={() => {
+									flagMut.mutate(
+										{ uid: email.uid, flagged: !email.flagged },
+										{
+											onSuccess: () => {
+												toast.success(
+													email.flagged ? "Flag removed" : "Flag added",
+												);
+											},
+											onError: (err) =>
+												toast.error(
+													err instanceof Error ? err.message : String(err),
+												),
+										},
+									);
+								}}
+							>
+								<StarIcon className="mr-1.5 size-4" />
+								{email.flagged ? "Remove flag" : "Add flag"}
+							</Button>
+						</>
+					)}
+				</DialogFooter>
 			</DialogContent>
 		</Dialog>
 	);

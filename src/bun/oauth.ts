@@ -513,7 +513,7 @@ function startCallbackServer(): void {
 				}
 			},
 		});
-		} catch (err) {
+	} catch (err) {
 		debugLog(
 			`[oauth] callback server FAILED to start on port ${port} (already in use by another instance?): ${String(err)}`,
 		);
