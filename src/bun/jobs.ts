@@ -147,7 +147,11 @@ setInterval(async () => {
 	const job = jobQueue.shift();
 	if (job) {
 		jobLock = true;
-		await processJob(job);
-		jobLock = false;
+		try {
+			await processJob(job);
+		} finally {
+			// Always release so a rejection can't wedge the queue forever.
+			jobLock = false;
+		}
 	}
 }, 1000);

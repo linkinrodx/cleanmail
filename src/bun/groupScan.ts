@@ -11,6 +11,9 @@ import { readSuggestionCache, writeSuggestionCache } from "./storage";
 /** Cache is served as-is when it is at most this old. */
 const SUGGESTION_FRESH_MS = 10 * 60 * 1000;
 
+/** Safety net: request cancel if a scan runs far longer than expected. */
+const SCAN_WATCHDOG_MS = 5 * 60 * 1000;
+
 /** Structural base of a scan progress frame (matches the shared type). */
 type ScanProgressBase = {
 	phase: "search" | "envelopes" | "done";
@@ -61,7 +64,12 @@ export function rpcCancelGroupScan({
 	accountId: string;
 	mailboxPath: string;
 }): { cancelled: boolean } {
-	cancelled.add(runningKey(accountId, mailboxPath));
+	const key = runningKey(accountId, mailboxPath);
+	if (!running.has(key)) {
+		// Nothing is scanning; don't leave a stale cancel flag behind.
+		return { cancelled: false };
+	}
+	cancelled.add(key);
 	return { cancelled: true };
 }
 
@@ -190,6 +198,18 @@ export async function rpcStartGroupScan({
 
 	// Fire-and-forget: never await this from the RPC handler.
 	void (async () => {
+		// If the scan stalls (e.g. a wedged socket never resolves), flip the
+		// cancel flag so it unwinds at its next batch boundary instead of
+		// hanging `running` forever.
+		const watchdog = setTimeout(() => {
+			if (running.has(key)) {
+				debugLog(
+					`[groups] scan watchdog elapsed for ${key}; requesting cancel`,
+				);
+				cancelled.add(key);
+			}
+		}, SCAN_WATCHDOG_MS);
+
 		let lastProgress: ScanProgressBase = {
 			phase: "search",
 			scanned: 0,
@@ -280,6 +300,7 @@ export async function rpcStartGroupScan({
 				error: err instanceof Error ? err.message : String(err),
 			});
 		} finally {
+			clearTimeout(watchdog);
 			running.delete(key);
 			cancelled.delete(key);
 		}

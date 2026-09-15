@@ -121,9 +121,10 @@ export async function mockFetchSenderEmails(params: {
 }) {
 	await delay(SIMULATED_DELAY_MS);
 	const { mailboxPath, authorEmail, page = 1, itemsPerPage = 20 } = params;
-	const needle = authorEmail.toLowerCase();
-	const all = getEmailsForMailbox(mailboxPath).filter((e) =>
-		e.from.toLowerCase().includes(needle),
+	// Match production semantics: EXACT sender address (not substring).
+	const target = authorEmail.toLowerCase();
+	const all = getEmailsForMailbox(mailboxPath).filter(
+		(e) => e.from.toLowerCase() === target,
 	);
 	const total = all.length;
 	const start = (page - 1) * itemsPerPage;

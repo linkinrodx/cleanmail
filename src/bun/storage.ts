@@ -63,84 +63,114 @@ export async function writeActions(actions: PersistedAction[]): Promise<void> {
 }
 
 /**
+ * Serialize suggestions-cache mutations. All read-modify-write cycles on the
+ * shared `suggestions.json` map go through this so a scan completing while a
+ * bulk cleanup is writing can't lose updates (single process, but the async
+ * interleaving is real). The chain never breaks on a rejected task.
+ */
+let suggestionsChain: Promise<unknown> = Promise.resolve();
+function serializeSuggestions<T>(task: () => Promise<T>): Promise<T> {
+	const result = suggestionsChain.then(task, task);
+	suggestionsChain = result.then(
+		() => undefined,
+		() => undefined,
+	);
+	return result;
+}
+
+/** Read the whole `accountId:mailboxPath -> entry` map. Never throws. */
+async function readSuggestionMap(): Promise<
+	Record<string, SuggestionCacheEntry>
+> {
+	const file = Bun.file(SUGGESTIONS_FILE);
+	if (!(await file.exists())) {
+		return {};
+	}
+	const content: unknown = await file.json();
+	if (content && typeof content === "object") {
+		return content as Record<string, SuggestionCacheEntry>;
+	}
+	return {};
+}
+
+/** Runtime guard against a corrupt-but-parseable cached entry. */
+function isSuggestionEntry(value: unknown): value is SuggestionCacheEntry {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const entry = value as { groups?: unknown; cachedAt?: unknown };
+	return Array.isArray(entry.groups) && typeof entry.cachedAt === "string";
+}
+
+/**
  * Read the persisted suggestions cache for one account+mailbox.
- * Missing or corrupt cache files resolve to `null` (never throw).
+ * Missing, corrupt, or malformed cache resolves to `null` (never throw).
  */
 export async function readSuggestionCache(
 	accountId: string,
 	mailboxPath: string,
 ): Promise<SuggestionCacheEntry | null> {
 	try {
-		const file = Bun.file(SUGGESTIONS_FILE);
-		const exists = await file.exists();
-		if (!exists) {
-			return null;
-		}
-		const content = await file.json();
-		const map = content as Record<string, SuggestionCacheEntry>;
-		return map[suggestionCacheKey(accountId, mailboxPath)] ?? null;
+		const map = await readSuggestionMap();
+		const entry = map[suggestionCacheKey(accountId, mailboxPath)];
+		return isSuggestionEntry(entry) ? entry : null;
 	} catch {
 		return null;
 	}
 }
 
 /**
- * Persist a suggestions scan result for one account+mailbox (read-modify-write
- * on a shared map). Returns the ISO timestamp that was stored.
+ * Persist a suggestions scan result for one account+mailbox. Serialized;
+ * returns the ISO timestamp that was stored.
  */
-export async function writeSuggestionCache(
+export function writeSuggestionCache(
 	accountId: string,
 	mailboxPath: string,
 	groups: SenderGroup[],
 ): Promise<string> {
-	await mkdir(APP_DATA_DIR, { recursive: true });
-
-	let map: Record<string, SuggestionCacheEntry> = {};
-	try {
-		const file = Bun.file(SUGGESTIONS_FILE);
-		const exists = await file.exists();
-		if (exists) {
-			const content = await file.json();
-			if (content && typeof content === "object") {
-				map = content as Record<string, SuggestionCacheEntry>;
-			}
-		}
-	} catch {
-		// corrupt/partial write — start a fresh map
-	}
-
-	const cachedAt = new Date().toISOString();
-	map[suggestionCacheKey(accountId, mailboxPath)] = { groups, cachedAt };
-	await Bun.write(SUGGESTIONS_FILE, JSON.stringify(map, null, 2));
-	return cachedAt;
+	return serializeSuggestions(async () => {
+		const cachedAt = new Date().toISOString();
+		const map = await readSuggestionMap();
+		map[suggestionCacheKey(accountId, mailboxPath)] = { groups, cachedAt };
+		await mkdir(APP_DATA_DIR, { recursive: true });
+		await Bun.write(SUGGESTIONS_FILE, JSON.stringify(map, null, 2));
+		return cachedAt;
+	});
 }
 
 /**
  * Remove a single sender from the persisted suggestion cache for a mailbox.
  * Called after a bulk action completes so a cleared sender never reappears on
- * the next load, independent of what the renderer is currently showing.
+ * the next load, independent of what the renderer is currently showing. Runs as
+ * one serialized read-modify-write and never throws.
  */
-export async function removeSenderFromSuggestionCache(
+export function removeSenderFromSuggestionCache(
 	accountId: string,
 	mailboxPath: string,
 	authorEmail: string,
 ): Promise<void> {
-	try {
-		const entry = await readSuggestionCache(accountId, mailboxPath);
-		if (!entry) {
-			return;
+	return serializeSuggestions(async () => {
+		try {
+			const map = await readSuggestionMap();
+			const key = suggestionCacheKey(accountId, mailboxPath);
+			const entry = map[key];
+			if (!isSuggestionEntry(entry)) {
+				return;
+			}
+			const target = authorEmail.toLowerCase();
+			const filtered = entry.groups.filter(
+				(g) => g.authorEmail.toLowerCase() !== target,
+			);
+			if (filtered.length === entry.groups.length) {
+				return;
+			}
+			map[key] = { groups: filtered, cachedAt: entry.cachedAt };
+			await mkdir(APP_DATA_DIR, { recursive: true });
+			await Bun.write(SUGGESTIONS_FILE, JSON.stringify(map, null, 2));
+		} catch {
+			// best-effort cache cleanup; never break a job over it
 		}
-		const target = authorEmail.toLowerCase();
-		const filtered = entry.groups.filter(
-			(g) => g.authorEmail.toLowerCase() !== target,
-		);
-		if (filtered.length === entry.groups.length) {
-			return;
-		}
-		await writeSuggestionCache(accountId, mailboxPath, filtered);
-	} catch {
-		// best-effort cache cleanup; never break a job over it
-	}
+	});
 }
 
 export async function readAccounts(): Promise<Account[]> {
