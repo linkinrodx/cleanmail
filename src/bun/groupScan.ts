@@ -14,13 +14,11 @@ const SUGGESTION_FRESH_MS = 10 * 60 * 1000;
 /** Safety net: request cancel if a scan runs far longer than expected. */
 const SCAN_WATCHDOG_MS = 5 * 60 * 1000;
 
-/** Structural base of a scan progress frame (matches the shared type). */
-type ScanProgressBase = {
-	phase: "search" | "envelopes" | "done";
-	scanned: number;
-	total: number;
-	sendersFound: number;
-};
+/** The subset of a scan progress frame we retain for the terminal push. */
+type ScanProgressBase = Pick<
+	GroupScanProgress,
+	"phase" | "scanned" | "total" | "sendersFound"
+>;
 
 const running = new Set<string>();
 
