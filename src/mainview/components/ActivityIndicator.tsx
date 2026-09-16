@@ -51,13 +51,9 @@ export function ActivityIndicator() {
 		: "Applying\u2026";
 
 	return (
-		<div
-			role="status"
-			aria-live="polite"
-			className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-lg backdrop-blur"
-		>
+		<output className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-lg backdrop-blur">
 			<Loader2Icon className="size-3.5 animate-spin" />
 			<span className="tabular-nums">{label}</span>
-		</div>
+		</output>
 	);
 }

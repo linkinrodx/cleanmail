@@ -23,6 +23,28 @@
 			"recommended": true
 		}
 	},
+	"overrides": [
+		{
+			"includes": ["src/mainview/components/ui/**"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noDocumentCookie": "off",
+						"noDoubleEquals": "off",
+						"noArrayIndexKey": "off"
+					},
+					"a11y": {
+						"useSemanticElements": "off",
+						"noRedundantRoles": "off",
+						"noLabelWithoutControl": "off"
+					},
+					"correctness": {
+						"useExhaustiveDependencies": "off"
+					}
+				}
+			}
+		}
+	],
 	"javascript": {
 		"formatter": {
 			"quoteStyle": "double"

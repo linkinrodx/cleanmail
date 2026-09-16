@@ -5,9 +5,9 @@ import type {
 	AccountProvider,
 	OAuthTokens,
 } from "../shared/rpc-types";
-import { getAccountById, writeAccounts } from "./storage";
-import { rpc } from "./rpc";
 import { debugLog } from "./debug";
+import { rpc } from "./rpc";
+import { getAccountById, writeAccounts } from "./storage";
 
 const KEYTAR_SERVICE = "cleanmail";
 const KEYTAR_ACCOUNT_OAUTH = (accountId: string) =>
@@ -71,6 +71,218 @@ function decodeJwtPayload(idToken: string): Record<string, string> {
 	const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
 	const json = Buffer.from(b64, "base64").toString("utf8");
 	return JSON.parse(json) as Record<string, string>;
+}
+
+// ---------------------------------------------------------------------------
+// OAuth callback page rendering.
+//
+// The callback server replies in the user's SYSTEM browser, so this has to be
+// one self-contained document: inline <style>, no bundler, no React, no
+// <script> (all motion is CSS keyframes). Every interpolated value goes
+// through escapeHtml() — provider error strings and emails are untrusted.
+// ---------------------------------------------------------------------------
+
+function escapeHtml(value: string): string {
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+}
+
+function providerLabel(provider: AccountProvider): string {
+	if (provider === "gmail") {
+		return "Gmail";
+	}
+	if (provider === "outlook") {
+		return "Microsoft";
+	}
+	return provider;
+}
+
+type CallbackPageKind = "success" | "error";
+
+function renderCallbackPage(opts: {
+	kind: CallbackPageKind;
+	title: string;
+	message: string;
+	/** success: the account email · error: the raw provider / error detail */
+	detail?: string;
+	/** success only: trailing provenance chip, e.g. "via Gmail" */
+	chip?: string;
+}): string {
+	const { kind, title, message, detail, chip } = opts;
+	const isSuccess = kind === "success";
+
+	const icon = isSuccess
+		? `<svg class="icon" viewBox="0 0 48 48" aria-hidden="true">
+      <circle class="ring" cx="24" cy="24" r="21"></circle>
+      <path class="tick" d="M15.5 24.9 21 30.4 32.5 18.9"></path>
+    </svg>`
+		: `<svg class="icon" viewBox="0 0 48 48" aria-hidden="true">
+      <circle class="ring" cx="24" cy="24" r="21"></circle>
+      <path class="tick bang" d="M24 14.5v12.6"></path>
+      <circle class="dot" cx="24" cy="33.4" r="1.6"></circle>
+    </svg>`;
+
+	const role = isSuccess ? "status" : "alert";
+
+	const detailHtml = detail
+		? isSuccess
+			? `<p class="email"><span class="label">Signed in as</span><span class="email-value">${escapeHtml(detail)}</span></p>`
+			: `<pre class="detail"><code>${escapeHtml(detail)}</code></pre>`
+		: "";
+
+	const chipHtml =
+		isSuccess && chip ? `<p class="chip">${escapeHtml(chip)}</p>` : "";
+
+	return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light dark" />
+<title>${escapeHtml(title)} · CleanMail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+<style>
+:root {
+  --bg: #f4f5f7; --card: #ffffff; --hair: rgba(255, 255, 255, 0.85); --border: rgba(15, 23, 42, 0.08);
+  --text: #111318; --muted: #6a7282; --code: #f3f5f7; --grain: 0.035;
+  --stroke: #22c55e; --soft: rgba(34, 197, 94, 0.10);
+  --glow-1: rgba(34, 197, 94, 0.13); --glow-2: rgba(56, 189, 248, 0.09);
+  --shadow: 0 1px 2px rgba(17,19,24,.05), 0 12px 24px -12px rgba(17,19,24,.18), 0 40px 60px -40px rgba(17,19,24,.25);
+}
+.kind-error {
+  --stroke: #f59e0b; --soft: rgba(245, 158, 11, 0.13);
+  --glow-1: rgba(245, 158, 11, 0.12); --glow-2: rgba(244, 63, 94, 0.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0b0d; --card: #141619; --hair: rgba(255, 255, 255, 0.10); --border: rgba(255, 255, 255, 0.09);
+    --text: #eef0f3; --muted: #98a1ae; --code: #1b1e23; --grain: 0.05;
+    --stroke: #4ade80; --soft: rgba(74, 222, 128, 0.14);
+    --glow-1: rgba(74, 222, 128, 0.10); --glow-2: rgba(56, 189, 248, 0.07);
+    --shadow: 0 1px 2px rgba(0,0,0,.45), 0 28px 60px -30px rgba(0,0,0,.9);
+  }
+  .kind-error {
+    --stroke: #fbbf24; --soft: rgba(251, 191, 36, 0.15);
+    --glow-1: rgba(251, 191, 36, 0.10); --glow-2: rgba(244, 63, 94, 0.06);
+  }
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center;
+  padding: 2.5rem 1.25rem; color: var(--text); -webkit-font-smoothing: antialiased;
+  background: radial-gradient(48rem 32rem at 50% -12%, var(--glow-1), transparent 68%),
+    radial-gradient(36rem 26rem at 92% 108%, var(--glow-2), transparent 70%), var(--bg);
+  font-family: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+/* Grain overlay — the only texture between the card and the gradient. */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: var(--grain);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.card {
+  position: relative; z-index: 1; width: 100%; max-width: 26rem; overflow: hidden;
+  padding: 2.4rem 2.1rem 2.2rem; text-align: center; background: var(--card);
+  border: 1px solid var(--border); border-radius: 1.15rem; box-shadow: var(--shadow);
+  animation: card-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.card::after {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--hair), transparent);
+}
+.brand {
+  display: flex; align-items: center; justify-content: center; gap: 0.45rem; margin: 0 0 1.9rem;
+  font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--muted); animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.04s both;
+}
+.mark {
+  display: block; width: 0.4375rem; height: 0.4375rem; border-radius: 999px;
+  background: var(--stroke); box-shadow: 0 0 0 0.25rem var(--soft);
+}
+.badge {
+  display: grid; place-items: center; width: 4.375rem; height: 4.375rem; margin: 0 auto 1.4rem;
+  border-radius: 999px; background: var(--soft);
+  animation: pop 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.kind-error .badge { animation: pop 0.55s cubic-bezier(0.16, 1, 0.3, 1) both, shake 0.5s ease-in-out 0.6s; }
+.icon { width: 2.375rem; height: 2.375rem; overflow: visible; }
+.ring {
+  fill: none; stroke: var(--stroke); stroke-width: 1.6; stroke-dasharray: 132; stroke-dashoffset: 132;
+  animation: draw 0.75s cubic-bezier(0.65, 0, 0.35, 1) 0.12s forwards;
+}
+.tick {
+  fill: none; stroke: var(--stroke); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 27; stroke-dashoffset: 27;
+  animation: draw 0.45s cubic-bezier(0.65, 0, 0.35, 1) 0.62s forwards;
+}
+.bang { stroke-dasharray: 13; stroke-dashoffset: 13; }
+.dot { fill: var(--stroke); opacity: 0; animation: fade 0.35s ease-out 0.95s forwards; }
+h1 {
+  margin: 0 0 0.55rem; font-size: 1.4375rem; font-weight: 600; letter-spacing: -0.021em; line-height: 1.25;
+  animation: fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
+.msg {
+  margin: 0 auto; max-width: 21rem; font-size: 0.9375rem; line-height: 1.62; color: var(--muted);
+  animation: fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both;
+}
+.email { margin: 1.6rem 0 0; animation: fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.38s both; }
+.label, .chip { font-size: 0.6875rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.label { display: block; margin: 0 0 0.5rem; }
+.email-value {
+  display: inline-block; padding: 0.5rem 0.95rem; background: var(--code); color: var(--text);
+  border: 1px solid var(--border); border-radius: 999px; font-size: 0.875rem; font-weight: 500;
+  word-break: break-all; font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 0.4rem; margin: 1.05rem 0 0; padding: 0.25rem 0.65rem;
+  border: 1px solid var(--border); border-radius: 999px;
+  animation: fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.46s both;
+}
+.chip::before {
+  content: ""; width: 0.3125rem; height: 0.3125rem; border-radius: 999px; background: var(--stroke);
+}
+.detail {
+  margin: 1.5rem 0 0; padding: 0.8rem 0.9rem; max-height: 9rem; overflow: auto;
+  background: var(--code); color: var(--muted); text-align: left;
+  border: 1px solid var(--border); border-radius: 0.65rem; font-size: 0.75rem; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word;
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  animation: fade-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.38s both;
+}
+@keyframes card-in { from { opacity: 0; transform: translateY(14px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes fade-up { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(0.86); } to { opacity: 1; transform: none; } }
+@keyframes fade { to { opacity: 1; } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes shake {
+  0%, 100% { transform: translateX(0); } 20% { transform: translateX(-3px); } 40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); } 80% { transform: translateX(2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001s !important; animation-delay: 0s !important; }
+  .ring, .tick { stroke-dashoffset: 0; }
+  .dot { opacity: 1; }
+}
+</style>
+</head>
+<body class="kind-${kind}">
+<main class="card" role="${role}">
+  <p class="brand"><span class="mark"></span>CleanMail</p>
+  <span class="badge">${icon}</span>
+  <h1>${escapeHtml(title)}</h1>
+  <p class="msg">${escapeHtml(message)}</p>
+  ${detailHtml}
+  ${chipHtml}
+</main>
+</body>
+</html>
+`;
 }
 
 export function buildAuthorizeUrl(
@@ -177,7 +389,7 @@ async function exchangeCodeForTokens(
 
 	let data: {
 		access_token: string;
-		refresh_token: string;
+		refresh_token?: string;
 		expires_in: number;
 		id_token?: string;
 	};
@@ -186,6 +398,19 @@ async function exchangeCodeForTokens(
 	} catch {
 		debugLog(`[oauth] tokenExchange invalid JSON: ${safeBody}`);
 		throw new Error(`Token exchange returned non-JSON body: ${safeBody}`);
+	}
+
+	// Google legitimately omits refresh_token when the account has already
+	// consented (no `prompt=consent` re-prompt) or when scope approval was
+	// denied. Without it the account can never re-authenticate, so fail loudly
+	// here instead of storing an undefined token in the keychain.
+	if (!data.refresh_token) {
+		debugLog(
+			`[oauth] tokenExchange MISSING refresh_token provider=${provider} accessTokenPresent=${!!data.access_token} expiresIn=${data.expires_in}`,
+		);
+		throw new Error(
+			"The provider did not return a refresh token. Re-run the sign-in and approve the consent screen (Error 403 / access_denied or already-consented accounts can cause this).",
+		);
 	}
 
 	return {
@@ -327,8 +552,13 @@ function cleanupPendingStates(): void {
 	}
 }
 
-// Start periodic cleanup (every 5 minutes)
-setInterval(cleanupPendingStates, 5 * 60 * 1000);
+// Start periodic cleanup (every 5 minutes). Unref the timer so this module-level
+// interval never keeps the event loop (and thus the process) alive on its own.
+const pendingStateCleanupTimer = setInterval(
+	cleanupPendingStates,
+	5 * 60 * 1000,
+);
+pendingStateCleanupTimer.unref();
 
 function startCallbackServer(): void {
 	if (callbackServerStarted) {
@@ -365,15 +595,30 @@ function startCallbackServer(): void {
 					callbackServerStarted = false;
 					server?.stop();
 
+					const who = pending
+						? providerLabel(pending.provider)
+						: "The provider";
 					return new Response(
-						`<html><body><h1>OAuth Error</h1><p>${error}</p></body></html>`,
+						renderCallbackPage({
+							kind: "error",
+							title: "Sign-in failed.",
+							message: `${who} reported an error while authorizing CleanMail. Nothing was saved, so you can try again.`,
+							detail: error,
+						}),
 						{ headers: { "Content-Type": "text/html" } },
 					);
 				}
 
 				if (!code || !state) {
 					return new Response(
-						`<html><body><h1>Invalid Callback</h1><p>Missing code or state</p></body></html>`,
+						renderCallbackPage({
+							kind: "error",
+							title: "Sign-in failed.",
+							message:
+								"The sign-in link is incomplete. Please start the connection again from CleanMail.",
+							detail:
+								"The callback URL arrived without a code or state parameter.",
+						}),
 						{ headers: { "Content-Type": "text/html" }, status: 400 },
 					);
 				}
@@ -381,7 +626,14 @@ function startCallbackServer(): void {
 				const pending = pendingStates.get(state);
 				if (!pending) {
 					return new Response(
-						`<html><body><h1>Invalid State</h1><p>State not found or expired</p></body></html>`,
+						renderCallbackPage({
+							kind: "error",
+							title: "Sign-in failed.",
+							message:
+								"This sign-in request was already used or has expired. Please start the connection again from CleanMail.",
+							detail:
+								"State not found — the callback did not match a pending sign-in.",
+						}),
 						{ headers: { "Content-Type": "text/html" }, status: 400 },
 					);
 				}
@@ -389,89 +641,11 @@ function startCallbackServer(): void {
 				pendingStates.delete(state);
 
 				try {
-					const tokens = await exchangeCodeForTokens(
+					const account = await completeAuthorization(
 						pending.provider,
 						code,
 						pending.codeVerifier,
 					);
-
-					let email: string;
-					if (pending.provider === "gmail") {
-						const userInfoRes = await fetch(
-							"https://www.googleapis.com/oauth2/v3/userinfo",
-							{
-								headers: { Authorization: `Bearer ${tokens.accessToken}` },
-							},
-						);
-						if (!userInfoRes.ok) {
-							throw new Error("Failed to fetch user info from Google");
-						}
-						const userInfo = (await userInfoRes.json()) as { email: string };
-						email = userInfo.email;
-					} else if (pending.provider === "outlook") {
-						// Use id_token from the initial token exchange (no second exchange!)
-						const idToken = tokens.idToken;
-						if (idToken) {
-							try {
-								const payload = decodeJwtPayload(idToken);
-								email =
-									payload.email ??
-									payload.preferred_username ??
-									payload.upn ??
-									"";
-							} catch (e) {
-								debugLog(`[oauth] failed to decode id_token: ${String(e)}`);
-								email = "";
-							}
-						} else {
-							// Fallback: call Microsoft Graph
-							const graphRes = await fetch(
-								"https://graph.microsoft.com/v1.0/me",
-								{
-									headers: { Authorization: `Bearer ${tokens.accessToken}` },
-								},
-							);
-							if (graphRes.ok) {
-								const graphData = (await graphRes.json()) as {
-									mail?: string;
-									userPrincipalName?: string;
-								};
-								email = graphData.mail ?? graphData.userPrincipalName ?? "";
-							} else {
-								throw new Error("Failed to fetch user email from Microsoft");
-							}
-						}
-					} else {
-						throw new Error(`Unsupported provider: ${pending.provider}`);
-					}
-
-					if (!email) {
-						throw new Error("Could not determine user email");
-					}
-
-					const account: Account = {
-						id: crypto.randomUUID(),
-						provider: pending.provider,
-						email,
-						host:
-							pending.provider === "gmail"
-								? "imap.gmail.com"
-								: "outlook.office365.com",
-						port: 993,
-						authMethod: "oauth2",
-					};
-
-					// Store ONLY the refresh token. Windows Credential Manager caps the
-					// credential blob at ~2560 bytes, and the full token set (access_token +
-					// refresh_token + id_token) exceeds that and throws a localized error.
-					// A fresh access_token is fetched on demand via refreshAccessToken().
-					await keytar.setPassword(
-						KEYTAR_SERVICE,
-						KEYTAR_ACCOUNT_OAUTH(account.id),
-						JSON.stringify({ refreshToken: tokens.refreshToken }),
-					);
-
-					await writeAccounts([...(await readAccountsInternal()), account]);
 
 					const result = { account };
 					pending.resolve(result);
@@ -482,7 +656,14 @@ function startCallbackServer(): void {
 					server?.stop();
 
 					return new Response(
-						`<html><body><h1>Success!</h1><p>Account ${email} added. You can close this window.</p></body></html>`,
+						renderCallbackPage({
+							kind: "success",
+							title: "Connected.",
+							message:
+								"CleanMail can now sync your mailbox. You can close this tab and return to the app.",
+							detail: account.email,
+							chip: `via ${providerLabel(pending.provider)}`,
+						}),
 						{ headers: { "Content-Type": "text/html" } },
 					);
 				} catch (err) {
@@ -507,7 +688,12 @@ function startCallbackServer(): void {
 					server?.stop();
 
 					return new Response(
-						`<html><body><h1>Error</h1><p>${errorMsg}</p></body></html>`,
+						renderCallbackPage({
+							kind: "error",
+							title: "Sign-in failed.",
+							message: `CleanMail could not finish connecting to ${providerLabel(pending.provider)}. No account was saved.`,
+							detail: errorMsg,
+						}),
 						{ headers: { "Content-Type": "text/html" }, status: 500 },
 					);
 				}
@@ -527,10 +713,113 @@ function startCallbackServer(): void {
 async function readAccountsInternal(): Promise<Account[]> {
 	try {
 		const { readAccounts } = await import("./storage");
-		return readAccounts();
+		// await, not return: readAccounts() is async and a returned (un-awaited)
+		// rejection would bypass this try/catch entirely.
+		return await readAccounts();
 	} catch {
 		return [];
 	}
+}
+
+// Shared completion pipeline for BOTH the callback server and the manual
+// (paste-the-URL) flow: exchange the code, resolve the account email, persist
+// the account (keytar refresh token + storage append) and log success.
+// Throws a descriptive Error on any failed step; the callers decide how to
+// surface it (HTTP page + pending promise, or RPC result).
+async function completeAuthorization(
+	provider: AccountProvider,
+	code: string,
+	codeVerifier: string,
+): Promise<Account> {
+	const tokens = await exchangeCodeForTokens(provider, code, codeVerifier);
+
+	let email = "";
+	if (provider === "gmail") {
+		const userInfoRes = await fetch(
+			"https://www.googleapis.com/oauth2/v3/userinfo",
+			{
+				headers: { Authorization: `Bearer ${tokens.accessToken}` },
+			},
+		);
+		if (!userInfoRes.ok) {
+			throw new Error("Failed to fetch user info from Google");
+		}
+		const userInfo = (await userInfoRes.json()) as { email: string };
+		email = userInfo.email;
+	} else if (provider === "outlook") {
+		// Prefer the id_token from the initial token exchange (no second exchange!)
+		const idToken = tokens.idToken;
+		if (idToken) {
+			try {
+				const payload = decodeJwtPayload(idToken);
+				email =
+					payload.email ?? payload.preferred_username ?? payload.upn ?? "";
+			} catch (e) {
+				debugLog(`[oauth] failed to decode id_token: ${String(e)}`);
+				email = "";
+			}
+		}
+		if (!email) {
+			// Fallback (no id_token, decode failure, or no email claim): Microsoft Graph.
+			const graphRes = await fetch("https://graph.microsoft.com/v1.0/me", {
+				headers: {
+					Authorization: `Bearer ${tokens.accessToken}`,
+					"Accept-Encoding": "identity",
+				},
+			});
+			if (graphRes.ok) {
+				const graphBody = await readBodySafely(graphRes);
+				try {
+					const graphData = JSON.parse(graphBody) as {
+						mail?: string;
+						userPrincipalName?: string;
+					};
+					email = graphData.mail ?? graphData.userPrincipalName ?? "";
+				} catch {
+					email = "";
+				}
+			} else {
+				const graphErr = await readBodySafely(graphRes);
+				debugLog(
+					`[oauth] graph FAILED status=${graphRes.status} body=${graphErr}`,
+				);
+				throw new Error("Failed to fetch user email from Microsoft");
+			}
+		}
+	} else {
+		throw new Error(`Unsupported provider: ${provider}`);
+	}
+
+	if (!email) {
+		throw new Error("Could not determine user email");
+	}
+
+	const account: Account = {
+		id: crypto.randomUUID(),
+		provider,
+		email,
+		host: provider === "gmail" ? "imap.gmail.com" : "outlook.office365.com",
+		port: 993,
+		authMethod: "oauth2",
+	};
+
+	// Store ONLY the refresh token. Windows Credential Manager caps the
+	// credential blob at ~2560 bytes, and the full token set (access_token +
+	// refresh_token + id_token) exceeds that and throws a localized error.
+	// A fresh access_token is fetched on demand via refreshAccessToken().
+	await keytar.setPassword(
+		KEYTAR_SERVICE,
+		KEYTAR_ACCOUNT_OAUTH(account.id),
+		JSON.stringify({ refreshToken: tokens.refreshToken }),
+	);
+
+	await writeAccounts([...(await readAccountsInternal()), account]);
+
+	debugLog(
+		`[oauth] SUCCESS provider=${provider} email=${email} accountId=${account.id}`,
+	);
+
+	return account;
 }
 
 async function finalizeOAuth(
@@ -541,87 +830,8 @@ async function finalizeOAuth(
 	{ success: true; account: Account } | { success: false; error: string }
 > {
 	try {
-		const tokens = await exchangeCodeForTokens(provider, code, codeVerifier);
-
-		let email: string;
-		if (provider === "gmail") {
-			const userInfoRes = await fetch(
-				"https://www.googleapis.com/oauth2/v3/userinfo",
-				{
-					headers: { Authorization: `Bearer ${tokens.accessToken}` },
-				},
-			);
-			if (!userInfoRes.ok) {
-				throw new Error("Failed to fetch user info from Google");
-			}
-			const userInfo = (await userInfoRes.json()) as { email: string };
-			email = userInfo.email;
-		} else if (provider === "outlook") {
-			// Use id_token from the initial token exchange (no second exchange!)
-			const idToken = tokens.idToken;
-			if (idToken) {
-				try {
-					const payload = decodeJwtPayload(idToken);
-					email =
-						payload.email ?? payload.preferred_username ?? payload.upn ?? "";
-				} catch (e) {
-					debugLog(`[oauth] failed to decode id_token: ${String(e)}`);
-					email = "";
-				}
-			} else {
-				// Fallback: call Microsoft Graph
-				const graphRes = await fetch("https://graph.microsoft.com/v1.0/me", {
-					headers: {
-						Authorization: `Bearer ${tokens.accessToken}`,
-						"Accept-Encoding": "identity",
-					},
-				});
-				if (graphRes.ok) {
-					const graphBody = await readBodySafely(graphRes);
-					try {
-						const graphData = JSON.parse(graphBody) as {
-							mail?: string;
-							userPrincipalName?: string;
-						};
-						email = graphData.mail ?? graphData.userPrincipalName ?? "";
-					} catch {
-						email = "";
-					}
-				} else {
-					const graphErr = await readBodySafely(graphRes);
-					debugLog(
-						`[oauth] graph FAILED status=${graphRes.status} body=${graphErr}`,
-					);
-					throw new Error("Failed to fetch user email from Microsoft");
-				}
-			}
-		} else {
-			throw new Error(`Unsupported provider: ${provider}`);
-		}
-
-		if (!email) {
-			throw new Error("Could not determine user email");
-		}
-
-		const account: Account = {
-			id: crypto.randomUUID(),
-			provider,
-			email,
-			host: provider === "gmail" ? "imap.gmail.com" : "outlook.office365.com",
-			port: 993,
-			authMethod: "oauth2",
-		};
-
-		await keytar.setPassword(
-			KEYTAR_SERVICE,
-			KEYTAR_ACCOUNT_OAUTH(account.id),
-			JSON.stringify({ refreshToken: tokens.refreshToken }),
-		);
-
-		await writeAccounts([...(await readAccountsInternal()), account]);
-
+		const account = await completeAuthorization(provider, code, codeVerifier);
 		rpc.send.oauthComplete({ account });
-
 		return { success: true, account };
 	} catch (err) {
 		const errorMsg = err instanceof Error ? err.message : String(err);
@@ -639,12 +849,14 @@ export async function beginOAuthFlow(
 	// Validate client ID before starting
 	const cfg = provider === "gmail" ? getGoogleConfig() : getMicrosoftConfig();
 	if (!cfg.clientId) {
+		const envVar = provider === "gmail" ? "GOOGLE_CLIENT_ID" : "MS_CLIENT_ID";
+		const envState = Bun.env[envVar] ? "set" : "EMPTY";
 		debugLog(
-			`[oauth] beginOAuthFlow ABORTED: ${provider} client ID empty (MS_CLIENT_ID set=${!!Bun.env.MS_CLIENT_ID}, GOOGLE_CLIENT_ID set=${!!Bun.env.GOOGLE_CLIENT_ID})`,
+			`[oauth] beginOAuthFlow ABORTED: ${provider} client ID empty (${envVar} is ${envState} — check your .env and restart the app)`,
 		);
 		return {
 			success: false,
-			error: `${provider} client ID not configured (MS_CLIENT_ID is ${Bun.env.MS_CLIENT_ID ? "set" : "EMPTY"} — check your .env and restart the app)`,
+			error: `${provider} client ID not configured (${envVar} is ${envState} — check your .env and restart the app)`,
 		};
 	}
 
