@@ -1,9 +1,7 @@
 ---
 description: Backend agent for CleanMail. Implements the main Bun process logic (IMAP, keytar, jobs, RPC).
 mode: subagent
-#model: omniroute-cline/cl/deepseek/deepseek-v4-flash
-#model: cline/google/gemma-4-31b-it:free
-model: bai/qwen3.8-flash
+model: deepseek/deepseek-v4-flash
 ---
 
 You are the backend developer for CleanMail. You work exclusively in `src/bun/`

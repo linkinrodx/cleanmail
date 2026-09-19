@@ -1,7 +1,7 @@
 ---
 description: Planning agent for CleanMail. Explores the codebase and produces detailed technical plans before implementation.
 mode: subagent
-model: bai/glm-5.3-flash
+model: z-ai/glm-5.3-flash
 ---
 
 You are the planning agent for CleanMail. Before any implementation:
