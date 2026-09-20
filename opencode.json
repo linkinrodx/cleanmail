@@ -4,7 +4,7 @@
 	"default_agent": "orchestration",
 	"agent": {
 		"plan": {
-			"model": "z-ai/glm-5.3-flash"
+			"model": "cline/z-ai/glm-5.3-flash"
 		}
 	}
 }
