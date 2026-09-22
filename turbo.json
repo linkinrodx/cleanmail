@@ -8,10 +8,13 @@
 		},
 		"build": {
 			"dependsOn": ["build:web"],
-			"outputs": ["dist/**", ".next/**"]
+			"outputs": ["dist/**", "build/**", "artifacts/**"]
 		},
 		"build:web": {
 			"outputs": ["dist/**"]
+		},
+		"typecheck": {
+			"cache": false
 		},
 		"format": {
 			"cache": false

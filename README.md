@@ -21,13 +21,15 @@ CleanMail is a local-first desktop app that connects to any IMAP mail server and
 
 ## Features
 
-- **IMAP account support** — connect to any mail server; credentials stored securely in the OS keychain
+- **Multi-account IMAP** — connect several mail servers; credentials stored securely in the OS keychain
+- **OAuth2 sign-in** — Google and Microsoft accounts via a local loopback callback (PKCE; no secret needed for public clients)
 - **Mailbox sidebar** — pinned important folders (Inbox, Sent, Drafts, Trash, Spam…) with live unread counts
 - **Read emails** — full HTML rendering in a sandboxed iframe, with plain-text fallback
 - **Delete emails** — smart delete moves to Trash first, or permanently removes if already there
 - **Drag & drop** — drag an email onto any sidebar mailbox to move it instantly
 - **Action system** — every move or delete auto-records a reusable rule: *"always move all emails from this sender to that folder"*
-- **Bulk apply** — run an action to move or delete every matching email from a sender in one shot
+- **Bulk apply** — run an action to move or delete every matching email from a sender in one shot, with live batch progress
+- **Suggestions** — scan a mailbox to group senders and get recommended actions
 
 ---
 
@@ -43,6 +45,25 @@ bun run start
 
 > Requires [Bun](https://bun.sh).
 
-On first launch, click the settings icon in the top bar to enter your IMAP credentials.
+On first launch, connect an account from the accounts screen (OAuth for
+Google/Microsoft, or IMAP host + password).
+
+### Development
+
+```bash
+bun run start        # HMR + app together (recommended for UI work)
+bun run hmr          # Vite HMR server only (port 5173)
+bun run start:app    # Electrobun dev (loads dist/, no HMR)
+bun run build        # Production build (renderer + Electrobun bundle)
+bun run build:web    # Renderer-only build (outputs to dist/)
+
+bun run lint         # Biome lint
+bun run format       # Biome format check
+bun run typecheck    # tsc --noEmit
+bun run clean        # Remove dist/, build/, artifacts/, .turbo/
+```
+
+CI runs format, lint, typecheck and the renderer build on every push/PR
+(see `.github/workflows/ci.yml`).
 
 ---

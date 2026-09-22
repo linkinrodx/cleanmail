@@ -23,14 +23,27 @@ cleanmail/
 ├── src/
 │   ├── bun/                  # Main process (Electrobun / Bun runtime)
 │   │   ├── index.ts          # Entry point: creates windows, starts RPC
-│   │   └── rpc.ts            # All RPC handler registrations
+│   │   ├── rpc.ts            # RPC handler registrations + notifier wiring
+│   │   ├── imap.ts           # IMAP client, handlers, exact-sender UID resolution
+│   │   ├── oauth.ts          # OAuth2 flows, token cache, local callback server
+│   │   ├── accounts.ts       # Account add/remove
+│   │   ├── actions.ts        # Persisted-action CRUD + job enqueueing
+│   │   ├── jobs.ts           # Bulk move/delete job queue (batched, progress)
+│   │   ├── flags.ts          # Seen/flag handlers
+│   │   ├── senderEmails.ts   # Sender-filtered email listing
+│   │   ├── groups.ts         # Sender grouping for Suggestions
+│   │   ├── groupScan.ts      # Async suggestion scan + progress
+│   │   ├── heuristics.ts     # Recommended-action heuristics
+│   │   ├── storage.ts        # JSON persistence (accounts/actions/suggestions)
+│   │   └── debug.ts          # debugLog file/stderr sink
 │   ├── mainview/             # Renderer / webview (React + Vite)
 │   │   ├── components/       # Shared React components
 │   │   │   └── ui/           # shadcn/ui generated components (do not hand-edit)
 │   │   ├── contexts/         # React contexts (Actions, ApplyAction, Drag)
 │   │   ├── hooks/
-│   │   │   ├── queries/      # TanStack Query hooks (useEmails, useMailboxes, …)
-│   │   │   └── mutations/    # TanStack Query mutation hooks
+│   │   │   ├── queries/      # TanStack Query hooks (useEmails, useMailboxes, ...)
+│   │   │   ├── mutations/    # TanStack Query mutation hooks
+│   │   │   └── useQueuedAction.ts # Bulk-action job tracking hook
 │   │   ├── pages/            # Page-level components ([Name]Page.tsx)
 │   │   ├── routes/           # TanStack Router file-based routes
 │   │   ├── lib/              # Utilities, helpers, query client setup
@@ -38,19 +51,24 @@ cleanmail/
 │   │   │   ├── query-keys.ts # Centralized query key factory
 │   │   │   ├── query-client.ts # QueryClient singleton
 │   │   │   └── utils.ts      # cn() (clsx + tailwind-merge)
+│   │   ├── __mocks__/        # MSW/faker mocks for VITE_MOCK=true
 │   │   ├── App.tsx           # Router outlet + providers
 │   │   ├── main.tsx          # React entry point
 │   │   ├── index.html        # HTML shell
-│   │   └── index.css         # Tailwind base styles
+│   │   └── index.css         # Tailwind v4 CSS-first theme
 │   └── shared/
 │       └── rpc-types.ts      # All shared types between bun and mainview
+├── .github/workflows/ci.yml  # CI: format + lint + typecheck + build
 ├── biome.json                # Linter + formatter config (single source of truth)
 ├── electrobun.config.ts      # App metadata, window defaults
 ├── vite.config.ts            # Vite + React plugin config
-├── tailwind.config.js        # Tailwind theme overrides
+├── turbo.json                # Task pipeline (HMR, watches, build)
+├── components.json           # shadcn/ui registry config
 ├── tsconfig.json
 └── package.json
 ```
+
+> Tailwind v4 is configured CSS-first via `src/mainview/index.css` (no `tailwind.config.js`).
 
 ## Commands
 
@@ -65,7 +83,7 @@ bun run start:app      # Electrobun dev (loads dist/, no HMR)
 bun run watch          # Turbo TUI: format:watch + lint:watch + HMR + app
 
 # Build
-bun run build          # Production build (electrobun build)
+bun run build          # Production build (build:web then electrobun build)
 bun run build:web      # Vite-only build (outputs to dist/)
 
 # Lint & Format  (Biome is the sole toolchain — no ESLint, no Prettier)
@@ -73,6 +91,10 @@ bun run lint           # Check for lint errors
 bun run lint:fix       # Auto-fix lint errors
 bun run format         # Check formatting
 bun run format:fix     # Auto-fix formatting
+
+# Types & cleanup
+bun run typecheck      # tsc --noEmit (zero errors expected)
+bun run clean          # Remove dist/, build/, artifacts/, .turbo/
 ```
 
 **There are no test scripts.** The project has no test framework configured. Do not add test dependencies without explicit instruction.
