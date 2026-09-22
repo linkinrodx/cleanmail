@@ -8,6 +8,7 @@ import {
 	PlayIcon,
 	Trash2Icon,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
 	ContextMenu,
 	ContextMenuContent,
@@ -104,20 +105,38 @@ export function ActionItem({ action, currentHref, jobId }: ActionItemProps) {
 		setJobStatus(resolvedId, { status: "pending" });
 
 		if (action.type === "move") {
-			applyMove.mutate({
-				jobId: resolvedId,
-				accountId: action.accountId,
-				authorEmail: action.authorEmail,
-				fromMailboxPath: action.fromMailboxPath,
-				toMailboxPath: action.toMailboxPath,
-			});
+			applyMove.mutate(
+				{
+					jobId: resolvedId,
+					accountId: action.accountId,
+					authorEmail: action.authorEmail,
+					fromMailboxPath: action.fromMailboxPath,
+					toMailboxPath: action.toMailboxPath,
+				},
+				{
+					onError: (err) => {
+						const message = err instanceof Error ? err.message : String(err);
+						setJobStatus(resolvedId, { status: "error", error: message });
+						toast.error(message);
+					},
+				},
+			);
 		} else {
-			applyDelete.mutate({
-				jobId: resolvedId,
-				accountId: action.accountId,
-				authorEmail: action.authorEmail,
-				mailboxPath: action.mailboxPath,
-			});
+			applyDelete.mutate(
+				{
+					jobId: resolvedId,
+					accountId: action.accountId,
+					authorEmail: action.authorEmail,
+					mailboxPath: action.mailboxPath,
+				},
+				{
+					onError: (err) => {
+						const message = err instanceof Error ? err.message : String(err);
+						setJobStatus(resolvedId, { status: "error", error: message });
+						toast.error(message);
+					},
+				},
+			);
 		}
 	}
 

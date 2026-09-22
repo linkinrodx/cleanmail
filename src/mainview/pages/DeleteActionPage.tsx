@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2Icon, PlayIcon, RefreshCwIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { EmailsPagination } from "@/components/EmailsPagination";
 import { EmailTable } from "@/components/EmailTable";
 import { Button } from "@/components/ui/button";
@@ -118,12 +119,21 @@ export function DeleteActionPage({
 		}
 
 		setJobStatus(jobId, { status: "pending" });
-		applyDelete.mutate({
-			jobId,
-			accountId,
-			authorEmail: decodedAuthorEmail,
-			mailboxPath,
-		});
+		applyDelete.mutate(
+			{
+				jobId,
+				accountId,
+				authorEmail: decodedAuthorEmail,
+				mailboxPath,
+			},
+			{
+				onError: (err) => {
+					const message = err instanceof Error ? err.message : String(err);
+					setJobStatus(jobId, { status: "error", error: message });
+					toast.error(message);
+				},
+			},
+		);
 	}
 
 	return (

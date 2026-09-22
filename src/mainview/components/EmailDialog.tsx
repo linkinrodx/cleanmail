@@ -28,7 +28,7 @@ export function EmailDialog({
 	mailboxPath,
 	uid,
 }: EmailDialogProps) {
-	const { data, isLoading, isError } = useEmailDetail(
+	const { data, isLoading, isError, error, refetch } = useEmailDetail(
 		accountId,
 		mailboxPath,
 		uid,
@@ -36,6 +36,11 @@ export function EmailDialog({
 	);
 
 	const email = data?.email ?? null;
+	const detailError = isError
+		? error instanceof Error
+			? error.message
+			: "Failed to load email"
+		: null;
 
 	const markReadMut = useMarkEmailRead(accountId, mailboxPath);
 	const flagMut = useSetEmailFlag(accountId, mailboxPath);
@@ -47,7 +52,11 @@ export function EmailDialog({
 				showCloseButton
 			>
 				<DialogHeader className="shrink-0 border-b px-6 py-4 pr-12">
-					{isLoading || !email ? (
+					{detailError ? (
+						<DialogTitle className="truncate text-base font-semibold text-destructive">
+							Error
+						</DialogTitle>
+					) : isLoading || !email ? (
 						<div className="h-5 w-48 animate-pulse rounded bg-muted" />
 					) : (
 						<DialogTitle className="truncate text-base font-semibold">
@@ -55,7 +64,9 @@ export function EmailDialog({
 						</DialogTitle>
 					)}
 
-					{isLoading || !email ? (
+					{detailError ? (
+						<p className="mt-1 text-xs text-destructive">{detailError}</p>
+					) : isLoading || !email ? (
 						<div className="mt-1 h-4 w-64 animate-pulse rounded bg-muted" />
 					) : (
 						<div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
@@ -74,8 +85,15 @@ export function EmailDialog({
 					)}
 
 					{isError ? (
-						<div className="flex h-40 items-center justify-center text-destructive text-sm">
-							Failed to load email.
+						<div className="flex h-40 flex-col items-center justify-center gap-3 text-sm">
+							<p className="text-destructive">
+								{error instanceof Error
+									? error.message
+									: "Failed to load email."}
+							</p>
+							<Button variant="outline" size="sm" onClick={() => refetch()}>
+								Retry
+							</Button>
 						</div>
 					) : null}
 

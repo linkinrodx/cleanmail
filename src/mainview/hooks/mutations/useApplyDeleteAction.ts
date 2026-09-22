@@ -6,11 +6,17 @@ import { applyDeleteAction } from "@/lib/rpc";
 export function useApplyDeleteAction(accountId: string) {
 	return useMutation({
 		mutationKey: mutationKeys.applyDeleteAction(accountId),
-		mutationFn: (params: {
+		mutationFn: async (params: {
 			jobId: string;
 			accountId: string;
 			authorEmail: string;
 			mailboxPath: string;
-		}) => applyDeleteAction(params),
+		}) => {
+			const res = await applyDeleteAction(params);
+			if (!res.queued) {
+				throw new Error(res.error ?? "Job could not be queued");
+			}
+			return res;
+		},
 	});
 }

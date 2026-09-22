@@ -7,8 +7,13 @@ export function useMarkEmailRead(accountId: string, mailboxPath: string) {
 
 	return useMutation({
 		mutationKey: mutationKeys.markEmailRead(accountId, mailboxPath),
-		mutationFn: ({ uid, seen }: { uid: number; seen: boolean }) =>
-			markEmailRead({ accountId, mailboxPath, uid, seen }),
+		mutationFn: async ({ uid, seen }: { uid: number; seen: boolean }) => {
+			const res = await markEmailRead({ accountId, mailboxPath, uid, seen });
+			if (!res.success) {
+				throw new Error(res.error ?? "Failed to mark email as read");
+			}
+			return res;
+		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({
 				queryKey: emailKeys.byAccountAndMailbox(accountId, mailboxPath)

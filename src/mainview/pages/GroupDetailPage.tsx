@@ -6,6 +6,7 @@ import {
 	TrashIcon,
 } from "lucide-react";
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { ActionOverlayPending } from "@/components/ActionOverlayPending";
 import { ActionOverlaySuccess } from "@/components/ActionOverlaySuccess";
 import { EmailsPagination } from "@/components/EmailsPagination";
@@ -87,10 +88,11 @@ export function GroupDetailPage({
 	const trashPath = mailboxes.find((m) => m.specialUse === "\\Trash")?.path;
 
 	const moveMut = useApplyMoveAction(accountId);
-	const { jobs } = useApplyActionContext();
+	const { jobs, setJobStatus } = useApplyActionContext();
 	const { start, isApplying, isSuccess, jobId } = useQueuedAction({
 		successDelay: 1200,
 		onSuccess: onBack,
+		onError: (error) => toast.error(error),
 	});
 
 	function handleArchive() {
@@ -101,13 +103,21 @@ export function GroupDetailPage({
 				mailboxPath,
 				authorEmail: decodedAuthorEmail,
 			});
-			moveMut.mutate({
-				...vars,
-				accountId,
-				authorEmail: decodedAuthorEmail,
-				fromMailboxPath: mailboxPath,
-				toMailboxPath: archivePath,
-			});
+			moveMut.mutate(
+				{
+					...vars,
+					accountId,
+					authorEmail: decodedAuthorEmail,
+					fromMailboxPath: mailboxPath,
+					toMailboxPath: archivePath,
+				},
+				{
+					onError: (err) => {
+						const message = err instanceof Error ? err.message : String(err);
+						setJobStatus(vars.jobId, { status: "error", error: message });
+					},
+				},
+			);
 		});
 	}
 
@@ -119,13 +129,21 @@ export function GroupDetailPage({
 				mailboxPath,
 				authorEmail: decodedAuthorEmail,
 			});
-			moveMut.mutate({
-				...vars,
-				accountId,
-				authorEmail: decodedAuthorEmail,
-				fromMailboxPath: mailboxPath,
-				toMailboxPath: trashPath,
-			});
+			moveMut.mutate(
+				{
+					...vars,
+					accountId,
+					authorEmail: decodedAuthorEmail,
+					fromMailboxPath: mailboxPath,
+					toMailboxPath: trashPath,
+				},
+				{
+					onError: (err) => {
+						const message = err instanceof Error ? err.message : String(err);
+						setJobStatus(vars.jobId, { status: "error", error: message });
+					},
+				},
+			);
 		});
 	}
 

@@ -6,12 +6,18 @@ import { applyMoveAction } from "@/lib/rpc";
 export function useApplyMoveAction(accountId: string) {
 	return useMutation({
 		mutationKey: mutationKeys.applyMoveAction(accountId),
-		mutationFn: (params: {
+		mutationFn: async (params: {
 			jobId: string;
 			accountId: string;
 			authorEmail: string;
 			fromMailboxPath: string;
 			toMailboxPath: string;
-		}) => applyMoveAction(params),
+		}) => {
+			const res = await applyMoveAction(params);
+			if (!res.queued) {
+				throw new Error(res.error ?? "Job could not be queued");
+			}
+			return res;
+		},
 	});
 }

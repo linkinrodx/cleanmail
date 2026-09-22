@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import type { GroupScanProgress } from "../../../shared/rpc-types";
 import { groupKeys } from "@/lib/query-keys";
 import {
@@ -45,7 +46,7 @@ export function useSuggestions(accountId: string, mailboxPath: string) {
 	}, [accountId, mailboxPath, queryClient]);
 
 	const startScan = useCallback(
-		(force: boolean) => {
+		async (force: boolean) => {
 			// Optimistically show the scanning state so the UI reacts immediately
 			// (before the first progress frame arrives).
 			setProgress({
@@ -57,7 +58,23 @@ export function useSuggestions(accountId: string, mailboxPath: string) {
 				total: 0,
 				sendersFound: 0,
 			});
-			return rpcStartGroupScan({ accountId, mailboxPath, force });
+			try {
+				const result = await rpcStartGroupScan({
+					accountId,
+					mailboxPath,
+					force,
+				});
+				if (!result.started) {
+					setProgress(null);
+					toast.error(result.error ?? "Scan could not be started");
+				}
+				// If started, progress frames arrive via the push listener.
+			} catch (err) {
+				setProgress(null);
+				toast.error(
+					err instanceof Error ? err.message : "Scan failed to start",
+				);
+			}
 		},
 		[accountId, mailboxPath],
 	);

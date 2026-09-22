@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useApplyActionContext } from "@/contexts/ApplyActionContext";
 import { useApplyDeleteAction } from "@/hooks/mutations/useApplyDeleteAction";
 import { useApplyMoveAction } from "@/hooks/mutations/useApplyMoveAction";
 import { useMarkSenderRead } from "@/hooks/mutations/useMarkSenderRead";
@@ -47,7 +48,10 @@ export function SuggestionRow({
 	const deleteMut = useApplyDeleteAction(accountId);
 	const markReadMut = useMarkSenderRead(accountId, mailboxPath);
 	const invalidate = useInvalidateSuggestion(accountId, mailboxPath);
-	const { start, isApplying } = useQueuedAction();
+	const { setJobStatus } = useApplyActionContext();
+	const { start, isApplying } = useQueuedAction({
+		onError: (error) => toast.error(error),
+	});
 
 	const isBusy = isApplying || markReadMut.isPending;
 
@@ -70,13 +74,22 @@ export function SuggestionRow({
 						mailboxPath,
 						authorEmail: group.authorEmail,
 					});
-					moveMut.mutate({
-						...vars,
-						accountId,
-						authorEmail: group.authorEmail,
-						fromMailboxPath: mailboxPath,
-						toMailboxPath: archivePath,
-					});
+					moveMut.mutate(
+						{
+							...vars,
+							accountId,
+							authorEmail: group.authorEmail,
+							fromMailboxPath: mailboxPath,
+							toMailboxPath: archivePath,
+						},
+						{
+							onError: (err) => {
+								const message =
+									err instanceof Error ? err.message : String(err);
+								setJobStatus(vars.jobId, { status: "error", error: message });
+							},
+						},
+					);
 				});
 				toast.success(`Archiving emails from ${group.authorEmail}`);
 				break;
@@ -89,13 +102,22 @@ export function SuggestionRow({
 						mailboxPath,
 						authorEmail: group.authorEmail,
 					});
-					moveMut.mutate({
-						...vars,
-						accountId,
-						authorEmail: group.authorEmail,
-						fromMailboxPath: mailboxPath,
-						toMailboxPath: trashPath,
-					});
+					moveMut.mutate(
+						{
+							...vars,
+							accountId,
+							authorEmail: group.authorEmail,
+							fromMailboxPath: mailboxPath,
+							toMailboxPath: trashPath,
+						},
+						{
+							onError: (err) => {
+								const message =
+									err instanceof Error ? err.message : String(err);
+								setJobStatus(vars.jobId, { status: "error", error: message });
+							},
+						},
+					);
 				});
 				toast.success(`Moving emails from ${group.authorEmail} to Trash`);
 				break;
@@ -107,12 +129,21 @@ export function SuggestionRow({
 						mailboxPath,
 						authorEmail: group.authorEmail,
 					});
-					deleteMut.mutate({
-						...vars,
-						accountId,
-						authorEmail: group.authorEmail,
-						mailboxPath,
-					});
+					deleteMut.mutate(
+						{
+							...vars,
+							accountId,
+							authorEmail: group.authorEmail,
+							mailboxPath,
+						},
+						{
+							onError: (err) => {
+								const message =
+									err instanceof Error ? err.message : String(err);
+								setJobStatus(vars.jobId, { status: "error", error: message });
+							},
+						},
+					);
 				});
 				toast.success(`Deleting emails from ${group.authorEmail}`);
 				break;

@@ -13,6 +13,14 @@ export function useQueuedAction(options: QueuedActionOptions = {}) {
 	const [jobId, setJobId] = useState<string | null>(null);
 	const handledRef = useRef(false);
 
+	// Store callbacks in refs so they are always current without appearing in
+	// effect dependency arrays (which must be stable primitives to avoid the
+	// cleanup→re-run loop that caused the "Done!" overlay to hang).
+	const onSuccessRef = useRef(options.onSuccess);
+	const onErrorRef = useRef(options.onError);
+	onSuccessRef.current = options.onSuccess;
+	onErrorRef.current = options.onError;
+
 	const jobState = jobId ? jobs[jobId] : undefined;
 	const isApplying =
 		jobState?.status === "pending" || jobState?.status === "running";
@@ -30,29 +38,31 @@ export function useQueuedAction(options: QueuedActionOptions = {}) {
 		[setJobStatus],
 	);
 
+	// --- Error path ---------------------------------------------------------
 	useEffect(() => {
 		if (!jobId) return;
 		if (isError && !handledRef.current) {
 			handledRef.current = true;
-			options.onError?.(jobState?.error ?? "Action failed");
+			onErrorRef.current?.(jobState?.error ?? "Action failed");
 			setJobId(null);
 		}
-	}, [isError, jobState?.error, jobId, options]);
+	}, [isError, jobState?.error, jobId]);
 
+	// --- Success path -------------------------------------------------------
 	useEffect(() => {
 		if (!isSuccess || handledRef.current) return;
 		handledRef.current = true;
 		const delay = options.successDelay ?? 0;
 		if (delay > 0) {
 			const t = setTimeout(() => {
-				options.onSuccess?.();
+				onSuccessRef.current?.();
 				setJobId(null);
 			}, delay);
 			return () => clearTimeout(t);
 		}
-		options.onSuccess?.();
+		onSuccessRef.current?.();
 		setJobId(null);
-	}, [isSuccess, options]);
+	}, [isSuccess, options.successDelay]);
 
 	return { jobId, start, isApplying, isSuccess, isError };
 }
