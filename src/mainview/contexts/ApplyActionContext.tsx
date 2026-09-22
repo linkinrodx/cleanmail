@@ -5,6 +5,7 @@ import type { ActionJobStatus } from "../../shared/rpc-types";
 export type ApplyJobState = {
 	status: ActionJobStatus;
 	error?: string;
+	progress?: { done: number; total: number };
 };
 
 type ApplyActionContextValue = {
@@ -34,12 +35,17 @@ export function ApplyActionContextProvider({
 			jobId,
 			status,
 			error,
+			progress,
 		}: {
 			jobId: string;
 			status: ActionJobStatus;
 			error?: string;
+			progress?: { done: number; total: number };
 		}) {
-			setApplyJobs((prev) => ({ ...prev, [jobId]: { status, error } }));
+			setApplyJobs((prev) => ({
+				...prev,
+				[jobId]: { status, error, progress },
+			}));
 		}
 
 		addActionStatusListener(onUpdate);

@@ -17,6 +17,7 @@ export function useEmails(
 			.byAccountAndMailbox(accountId, mailboxPath)
 			._ctx.filtered(resolvedFilters),
 		queryFn: () => fetchEmails({ accountId, mailboxPath, ...resolvedFilters }),
+		staleTime: 30 * 1000,
 	});
 }
 

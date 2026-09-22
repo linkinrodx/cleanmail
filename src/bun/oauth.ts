@@ -13,6 +13,70 @@ const KEYTAR_SERVICE = "cleanmail";
 const KEYTAR_ACCOUNT_OAUTH = (accountId: string) =>
 	`cleanmail:acct:${accountId}:oauth`;
 
+// In-memory cache of live access tokens keyed by accountId. `getValidAccessToken`
+// serves a cached token while it still has this much runway left, avoiding a
+// network refresh (and a keytar round-trip) on every IMAP connect. The cache is
+// dropped on any 401-style auth failure so a revoked/expired token is never
+// replayed. CleanMail is single-instance, so no cross-process staleness.
+const ACCESS_TOKEN_CACHE_BUFFER_MS = 60 * 1000;
+const accessTokenCache = new Map<
+	string,
+	{ accessToken: string; expiresAt: number }
+>();
+
+/**
+ * Best-effort detection of an IMAP auth failure caused by a bad/expired OAuth
+ * access token. imapflow marks failed SASL exchanges with `authenticationFailed`
+ * and (for XOAUTH2) an `oauthError` payload carrying the provider's `status`
+ * (Gmail reports `"401"` here); the message/reason text is checked as a fallback.
+ */
+export function isOAuth401Error(err: unknown): boolean {
+	if (!err || typeof err !== "object") {
+		return false;
+	}
+	const authErr = err as {
+		authenticationFailed?: unknown;
+		oauthError?: unknown;
+		response?: unknown;
+	};
+	if (authErr.authenticationFailed === true) {
+		return true;
+	}
+	const oauthError = authErr.oauthError;
+	if (oauthError && typeof oauthError === "object") {
+		const status = (oauthError as { status?: unknown }).status;
+		if (String(status) === "401") {
+			return true;
+		}
+	}
+	const detail =
+		err instanceof Error
+			? `${err.message} ${String(authErr.response ?? "")}`
+			: String(err);
+	return /401|authenticationfailed|invalid.?grant/i.test(detail);
+}
+
+/**
+ * Drop the in-memory access-token cache entry for an OAuth account so the next
+ * `getValidAccessToken` call fetches a fresh token instead of reusing a dead one.
+ */
+export function invalidateAccessTokenCache(accountId: string): void {
+	accessTokenCache.delete(accountId);
+}
+
+/**
+ * Convenience wrapper for IMAP error paths: invalidate the token cache only when
+ * the account actually authenticates with OAuth2 AND the error looks like a 401.
+ */
+export function invalidateAccessTokenOnAuthFailure(
+	account: Account,
+	err: unknown,
+): void {
+	if (account.authMethod === "oauth2" && isOAuth401Error(err)) {
+		accessTokenCache.delete(account.id);
+	}
+}
+
 const DEFAULT_PORT = 8765;
 const DEFAULT_PATH = "/callback";
 
@@ -475,6 +539,13 @@ export async function refreshAccessToken(
 }
 
 export async function getValidAccessToken(accountId: string): Promise<string> {
+	// Serve the cached access token while it still has runway (refresh 60s
+	// before expiry) instead of hitting the provider on every IMAP connect.
+	const cached = accessTokenCache.get(accountId);
+	if (cached && cached.expiresAt - Date.now() > ACCESS_TOKEN_CACHE_BUFFER_MS) {
+		return cached.accessToken;
+	}
+
 	const stored = await keytar.getPassword(
 		KEYTAR_SERVICE,
 		KEYTAR_ACCOUNT_OAUTH(accountId),
@@ -505,6 +576,10 @@ export async function getValidAccessToken(accountId: string): Promise<string> {
 		KEYTAR_ACCOUNT_OAUTH(accountId),
 		JSON.stringify({ refreshToken: newTokens.refreshToken }),
 	);
+	accessTokenCache.set(accountId, {
+		accessToken: newTokens.accessToken,
+		expiresAt: newTokens.expiresAt,
+	});
 	return newTokens.accessToken;
 }
 

@@ -1,4 +1,5 @@
 import { useForm } from "@tanstack/react-form";
+import { InfoIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import {
@@ -9,6 +10,11 @@ import {
 	FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { useAddAccountPassword } from "@/hooks/mutations/useAddAccountPassword";
 
@@ -99,7 +105,23 @@ export function ImapSetupForm({ onAdded }: ImapSetupFormProps) {
 						<Field
 							data-invalid={field.state.meta.errors.length > 0 || undefined}
 						>
-							<FieldLabel htmlFor={field.name}>IMAP Host</FieldLabel>
+							<FieldLabel
+								htmlFor={field.name}
+								className="flex items-center gap-1.5"
+							>
+								IMAP Host
+								<Tooltip>
+									<TooltipTrigger className="inline-flex size-4 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring">
+										<InfoIcon className="size-3" />
+										<span className="sr-only">About IMAP Host</span>
+									</TooltipTrigger>
+									<TooltipContent className="max-w-xs">
+										The incoming mail server address. Usually starts with
+										"imap." (e.g. imap.gmail.com). Check your provider's docs
+										for the correct hostname.
+									</TooltipContent>
+								</Tooltip>
+							</FieldLabel>
 							<Input
 								id={field.name}
 								name={field.name}
@@ -134,7 +156,22 @@ export function ImapSetupForm({ onAdded }: ImapSetupFormProps) {
 						<Field
 							data-invalid={field.state.meta.errors.length > 0 || undefined}
 						>
-							<FieldLabel htmlFor={field.name}>Port</FieldLabel>
+							<FieldLabel
+								htmlFor={field.name}
+								className="flex items-center gap-1.5"
+							>
+								Port
+								<Tooltip>
+									<TooltipTrigger className="inline-flex size-4 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring">
+										<InfoIcon className="size-3" />
+										<span className="sr-only">About Port</span>
+									</TooltipTrigger>
+									<TooltipContent className="max-w-xs">
+										993 for SSL/TLS (recommended). Use 143 for STARTTLS or 993
+										for implicit TLS. Most providers use 993.
+									</TooltipContent>
+								</Tooltip>
+							</FieldLabel>
 							<Input
 								id={field.name}
 								name={field.name}

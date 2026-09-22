@@ -14,5 +14,6 @@ export function useEmailDetail(
 			._ctx.detail(uid ?? 0),
 		queryFn: () => fetchEmailDetail({ accountId, mailboxPath, uid: uid ?? 0 }),
 		enabled: enabled && uid !== null,
+		staleTime: 5 * 60 * 1000,
 	});
 }

@@ -1,6 +1,7 @@
 import type { ImapFlow } from "imapflow";
 import type { Email, FetchSenderEmailsData } from "../shared/rpc-types";
 import { createImapClient, findUidsByExactSender } from "./imap";
+import { invalidateAccessTokenOnAuthFailure } from "./oauth";
 import { getAccountById } from "./storage";
 
 const DEFAULT_ITEMS_PER_PAGE = 20;
@@ -84,6 +85,7 @@ export async function rpcFetchSenderEmails({
 		await client.logout();
 		return { emails, total };
 	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		const m = err instanceof Error ? err.message : String(err);
 		try {
 			await client?.logout();

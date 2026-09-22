@@ -220,6 +220,13 @@ export type ActionStatusUpdate = {
 	jobId: string;
 	status: ActionJobStatus;
 	error?: string;
+	/**
+	 * Partial progress for a running bulk job, pushed after each batch of UIDs
+	 * is processed. `done` counts messages already moved/deleted; `total` is the
+	 * full UID set the job resolved up front. Only present while `status` is
+	 * "running"; terminal "success"/"error" frames omit it.
+	 */
+	progress?: { done: number; total: number };
 };
 
 // ---------------------------------------------------------------------------

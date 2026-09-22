@@ -25,6 +25,7 @@ export function useSenderEmails(
 			._ctx.sender(resolvedFilters),
 		queryFn: () =>
 			fetchSenderEmails({ accountId, mailboxPath, ...resolvedFilters }),
+		staleTime: 30 * 1000,
 	});
 }
 

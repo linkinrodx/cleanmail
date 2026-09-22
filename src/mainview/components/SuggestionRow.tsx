@@ -1,13 +1,12 @@
-import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useApplyActionContext } from "@/contexts/ApplyActionContext";
 import { useApplyDeleteAction } from "@/hooks/mutations/useApplyDeleteAction";
 import { useApplyMoveAction } from "@/hooks/mutations/useApplyMoveAction";
 import { useMarkSenderRead } from "@/hooks/mutations/useMarkSenderRead";
 import { useMailboxes } from "@/hooks/queries/useMailboxes";
 import { useInvalidateSuggestion } from "@/hooks/useInvalidateSuggestion";
+import { useQueuedAction } from "@/hooks/useQueuedAction";
 import { registerSuggestionJob } from "@/lib/suggestion-jobs";
 import type { SenderGroup } from "../../shared/rpc-types";
 
@@ -48,14 +47,9 @@ export function SuggestionRow({
 	const deleteMut = useApplyDeleteAction(accountId);
 	const markReadMut = useMarkSenderRead(accountId, mailboxPath);
 	const invalidate = useInvalidateSuggestion(accountId, mailboxPath);
-	const { jobs, setJobStatus } = useApplyActionContext();
+	const { start, isApplying } = useQueuedAction();
 
-	const [jobId, setJobId] = useState<string | null>(null);
-	const jobState = jobId ? jobs[jobId] : undefined;
-	const isBusy =
-		jobState?.status === "pending" ||
-		jobState?.status === "running" ||
-		markReadMut.isPending;
+	const isBusy = isApplying || markReadMut.isPending;
 
 	// Completion (toast + removing the sender from the suggestion cache) is
 	// handled globally by SuggestionJobWatcher, so it fires even if the user
@@ -70,58 +64,55 @@ export function SuggestionRow({
 		switch (group.recommendedAction) {
 			case "ARCHIVE": {
 				if (!archivePath) return;
-				const id = crypto.randomUUID();
-				setJobId(id);
-				setJobStatus(id, { status: "pending" });
-				registerSuggestionJob(id, {
-					accountId,
-					mailboxPath,
-					authorEmail: group.authorEmail,
-				});
-				moveMut.mutate({
-					jobId: id,
-					accountId,
-					authorEmail: group.authorEmail,
-					fromMailboxPath: mailboxPath,
-					toMailboxPath: archivePath,
+				start((vars) => {
+					registerSuggestionJob(vars.jobId, {
+						accountId,
+						mailboxPath,
+						authorEmail: group.authorEmail,
+					});
+					moveMut.mutate({
+						...vars,
+						accountId,
+						authorEmail: group.authorEmail,
+						fromMailboxPath: mailboxPath,
+						toMailboxPath: archivePath,
+					});
 				});
 				toast.success(`Archiving emails from ${group.authorEmail}`);
 				break;
 			}
 			case "TRASH": {
 				if (!trashPath) return;
-				const id = crypto.randomUUID();
-				setJobId(id);
-				setJobStatus(id, { status: "pending" });
-				registerSuggestionJob(id, {
-					accountId,
-					mailboxPath,
-					authorEmail: group.authorEmail,
-				});
-				moveMut.mutate({
-					jobId: id,
-					accountId,
-					authorEmail: group.authorEmail,
-					fromMailboxPath: mailboxPath,
-					toMailboxPath: trashPath,
+				start((vars) => {
+					registerSuggestionJob(vars.jobId, {
+						accountId,
+						mailboxPath,
+						authorEmail: group.authorEmail,
+					});
+					moveMut.mutate({
+						...vars,
+						accountId,
+						authorEmail: group.authorEmail,
+						fromMailboxPath: mailboxPath,
+						toMailboxPath: trashPath,
+					});
 				});
 				toast.success(`Moving emails from ${group.authorEmail} to Trash`);
 				break;
 			}
 			case "DELETE": {
-				const id = crypto.randomUUID();
-				setJobId(id);
-				setJobStatus(id, { status: "pending" });
-				registerSuggestionJob(id, {
-					accountId,
-					mailboxPath,
-					authorEmail: group.authorEmail,
-				});
-				deleteMut.mutate({
-					jobId: id,
-					accountId,
-					authorEmail: group.authorEmail,
-					mailboxPath,
+				start((vars) => {
+					registerSuggestionJob(vars.jobId, {
+						accountId,
+						mailboxPath,
+						authorEmail: group.authorEmail,
+					});
+					deleteMut.mutate({
+						...vars,
+						accountId,
+						authorEmail: group.authorEmail,
+						mailboxPath,
+					});
 				});
 				toast.success(`Deleting emails from ${group.authorEmail}`);
 				break;

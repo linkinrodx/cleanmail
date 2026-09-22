@@ -5,6 +5,7 @@ import type {
 	SetEmailFlagData,
 } from "../shared/rpc-types";
 import { createImapClient, findUidsByExactSender } from "./imap";
+import { invalidateAccessTokenOnAuthFailure } from "./oauth";
 import { getAccountById } from "./storage";
 
 /** Add or remove the `\Seen` flag on a single message. */
@@ -37,6 +38,7 @@ export async function rpcMarkEmailRead({
 		await client.logout();
 		return { success: true };
 	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		const m = err instanceof Error ? err.message : String(err);
 		try {
 			await client?.logout();
@@ -77,6 +79,7 @@ export async function rpcSetEmailFlag({
 		await client.logout();
 		return { success: true };
 	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		const m = err instanceof Error ? err.message : String(err);
 		try {
 			await client?.logout();
@@ -124,6 +127,7 @@ export async function rpcMarkSenderRead({
 		await client.logout();
 		return { success: true, updatedCount };
 	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		const m = err instanceof Error ? err.message : String(err);
 		try {
 			await client?.logout();

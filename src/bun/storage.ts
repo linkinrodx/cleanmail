@@ -30,6 +30,13 @@ const ACTIONS_FILE = join(APP_DATA_DIR, "actions.json");
 const ACCOUNTS_FILE = join(APP_DATA_DIR, "accounts.json");
 const SUGGESTIONS_FILE = join(APP_DATA_DIR, "suggestions.json");
 
+// In-memory caches for the two JSON files that are read on hot paths
+// (getActions / getAccountById / listAccounts). Populated on first read and
+// write-through on every write; CleanMail is single-instance, so a stale cache
+// from an external process is not a realistic concern.
+let accountsCache: Account[] | null = null;
+let actionsCache: PersistedAction[] | null = null;
+
 type SuggestionCacheEntry = {
 	groups: SenderGroup[];
 	cachedAt: string;
@@ -43,15 +50,21 @@ const LEGACY_KEYTAR_CONFIG = "imap-config";
 const LEGACY_KEYTAR_PASSWORD = "imap-password";
 
 export async function readActions(): Promise<PersistedAction[]> {
+	if (actionsCache !== null) {
+		return actionsCache;
+	}
 	try {
 		const file = Bun.file(ACTIONS_FILE);
 		const exists = await file.exists();
 		if (!exists) {
-			return [];
+			actionsCache = [];
+			return actionsCache;
 		}
 
 		const content = await file.json();
-		return content as PersistedAction[];
+		const actions = content as PersistedAction[];
+		actionsCache = actions;
+		return actions;
 	} catch {
 		return [];
 	}
@@ -60,6 +73,7 @@ export async function readActions(): Promise<PersistedAction[]> {
 export async function writeActions(actions: PersistedAction[]): Promise<void> {
 	await mkdir(APP_DATA_DIR, { recursive: true });
 	await Bun.write(ACTIONS_FILE, JSON.stringify(actions, null, 2));
+	actionsCache = actions; // write-through
 }
 
 /**
@@ -174,15 +188,21 @@ export function removeSenderFromSuggestionCache(
 }
 
 export async function readAccounts(): Promise<Account[]> {
+	if (accountsCache !== null) {
+		return accountsCache;
+	}
 	try {
 		const file = Bun.file(ACCOUNTS_FILE);
 		const exists = await file.exists();
+		let accounts: Account[];
 		if (!exists) {
-			return await migrateLegacyConfig();
+			accounts = await migrateLegacyConfig();
+		} else {
+			const content = await file.json();
+			accounts = content as Account[];
 		}
-
-		const content = await file.json();
-		return content as Account[];
+		accountsCache = accounts;
+		return accounts;
 	} catch {
 		return [];
 	}
@@ -239,6 +259,7 @@ async function migrateLegacyConfig(): Promise<Account[]> {
 export async function writeAccounts(accounts: Account[]): Promise<void> {
 	await mkdir(APP_DATA_DIR, { recursive: true });
 	await Bun.write(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2));
+	accountsCache = accounts; // write-through
 }
 
 export async function getAccountById(id: string): Promise<Account | null> {

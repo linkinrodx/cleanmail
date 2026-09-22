@@ -1,6 +1,7 @@
 import type { ImapFlow } from "imapflow";
 import type { ActionStatusUpdate } from "../shared/rpc-types";
 import { createImapClient, findUidsByExactSender } from "./imap";
+import { invalidateAccessTokenOnAuthFailure } from "./oauth";
 import { getAccountById, removeSenderFromSuggestionCache } from "./storage";
 
 type ApplyMoveJob = {
@@ -24,6 +25,14 @@ type ApplyJob = ApplyMoveJob | ApplyDeleteJob;
 
 export const jobQueue: ApplyJob[] = [];
 
+/**
+ * UIDs processed per `messageMove`/`messageDelete` call in a bulk job. Small
+ * batches keep a single command under the server's sequence-list limits and let
+ * the renderer show partial progress (`progress: { done, total }`) after each
+ * batch instead of a silent "Applying…" over thousands of messages.
+ */
+const BATCH_SIZE = 200;
+
 type NotifyFn = (update: ActionStatusUpdate) => void;
 
 let _notify: NotifyFn = () => {};
@@ -45,9 +54,17 @@ const processMoveJob = async (client: ImapFlow, job: ApplyMoveJob) => {
 	try {
 		const uids = await findUidsByExactSender(client, job.authorEmail);
 
-		if (uids.length > 0) {
-			await client.messageMove({ uid: uids.join(",") }, job.toMailboxPath, {
+		let done = 0;
+		for (let i = 0; i < uids.length; i += BATCH_SIZE) {
+			const batch = uids.slice(i, i + BATCH_SIZE);
+			await client.messageMove({ uid: batch.join(",") }, job.toMailboxPath, {
 				uid: true,
+			});
+			done += batch.length;
+			notifyWebview({
+				jobId: job.jobId,
+				status: "running",
+				progress: { done, total: uids.length },
 			});
 		}
 	} finally {
@@ -73,14 +90,22 @@ const processDeleteJob = async (client: ImapFlow, job: ApplyDeleteJob) => {
 	try {
 		const uids = await findUidsByExactSender(client, job.authorEmail);
 
-		if (uids.length > 0) {
+		let done = 0;
+		for (let i = 0; i < uids.length; i += BATCH_SIZE) {
+			const batch = uids.slice(i, i + BATCH_SIZE);
 			if (trashMailboxPath && !alreadyInTrash) {
-				await client.messageMove({ uid: uids.join(",") }, trashMailboxPath, {
+				await client.messageMove({ uid: batch.join(",") }, trashMailboxPath, {
 					uid: true,
 				});
 			} else {
-				await client.messageDelete({ uid: uids.join(",") }, { uid: true });
+				await client.messageDelete({ uid: batch.join(",") }, { uid: true });
 			}
+			done += batch.length;
+			notifyWebview({
+				jobId: job.jobId,
+				status: "running",
+				progress: { done, total: uids.length },
+			});
 		}
 	} finally {
 		lock.release();
@@ -124,6 +149,7 @@ export async function processJob(job: ApplyJob) {
 			job.authorEmail,
 		);
 	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		try {
 			await client?.logout();
 		} catch {

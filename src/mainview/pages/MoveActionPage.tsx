@@ -135,9 +135,9 @@ export function MoveActionPage({
 	}
 
 	return (
-		<div className="flex min-h-screen flex-col bg-background">
+		<div className="flex h-svh w-full min-w-0 flex-col overflow-hidden bg-background">
 			{/* Top bar */}
-			<header className="flex items-center justify-between border-b px-3 py-2.5">
+			<header className="flex shrink-0 items-center justify-between border-b px-3 py-2.5">
 				<div className="flex items-center gap-3 min-w-0">
 					<SidebarTrigger className="shrink-0" />
 					<div className="flex items-center gap-2.5 min-w-0">
@@ -193,7 +193,7 @@ export function MoveActionPage({
 			</header>
 
 			{/* Main content */}
-			<main className="relative flex flex-1 flex-col">
+			<main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
 				{fetchError ? (
 					<div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
 						<p className="text-sm text-destructive">{fetchError}</p>
@@ -229,7 +229,15 @@ export function MoveActionPage({
 					</>
 				)}
 
-				{isApplying ? <ActionOverlayPending text="Moving all emails…" /> : null}
+				{isApplying ? (
+					<ActionOverlayPending
+						text={
+							jobState?.progress
+								? `Moving ${jobState.progress.done.toLocaleString()}/${jobState.progress.total.toLocaleString()}…`
+								: "Moving all emails…"
+						}
+					/>
+				) : null}
 				{isSuccess ? <ActionOverlaySuccess text="All emails moved!" /> : null}
 			</main>
 		</div>

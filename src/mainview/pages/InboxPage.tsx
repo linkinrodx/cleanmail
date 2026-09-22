@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EmailsPagination } from "@/components/EmailsPagination";
 import { EmailTable } from "@/components/EmailTable";
 import { ImapSetupDialog } from "@/components/ImapSetupDialog";
@@ -31,17 +31,41 @@ export function InboxPage({ accountId, page, onPageChange }: InboxPageProps) {
 
 	const isLoading = emailsLoading;
 
+	// Scroll restoration
+	const mainRef = useRef<HTMLElement | null>(null);
+	const restoredRef = useRef(false);
+	const scrollKey = `scroll:${accountId}:${activeMailboxPath}`;
+
+	useEffect(() => {
+		if (restoredRef.current) return;
+		const el = mainRef.current;
+		if (!el || emails.length === 0) return;
+		const saved = sessionStorage.getItem(scrollKey);
+		if (saved) el.scrollTop = Number(saved);
+		restoredRef.current = true;
+	}, [emails.length, scrollKey]);
+
+	function handleScroll(e: React.UIEvent<HTMLElement>) {
+		sessionStorage.setItem(scrollKey, String(e.currentTarget.scrollTop));
+	}
+
 	return (
-		<div className="flex min-h-screen flex-col bg-background">
-			<TopBar
-				title="Inbox"
-				isLoading={isLoading}
-				refetch={refetch}
-				setSetupOpen={setSetupOpen}
-			/>
+		<div className="flex h-svh w-full min-w-0 flex-col overflow-hidden bg-background">
+			<header className="shrink-0">
+				<TopBar
+					title="Inbox"
+					isLoading={isLoading}
+					refetch={refetch}
+					setSetupOpen={setSetupOpen}
+				/>
+			</header>
 
 			{/* Main content */}
-			<main className="flex flex-1 flex-col">
+			<main
+				ref={mainRef}
+				onScroll={handleScroll}
+				className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
+			>
 				{fetchError ? (
 					<div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
 						<p className="text-sm text-destructive">{fetchError}</p>

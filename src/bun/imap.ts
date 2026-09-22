@@ -11,7 +11,10 @@ import type {
 } from "../shared/rpc-types";
 import type { Account } from "../shared/rpc-types";
 import { getAccountById } from "./storage";
-import { getValidAccessToken } from "./oauth";
+import {
+	getValidAccessToken,
+	invalidateAccessTokenOnAuthFailure,
+} from "./oauth";
 import { debugLog } from "./debug";
 
 const KEYTAR_SERVICE = "cleanmail";
@@ -132,7 +135,8 @@ export async function countEmailsFrom({
 
 		await client.logout();
 		return count;
-	} catch {
+	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		try {
 			await client?.logout();
 		} catch {
@@ -142,6 +146,17 @@ export async function countEmailsFrom({
 	}
 }
 
+/**
+ * List a page of messages for the mailbox view.
+ *
+ * NOTE — the `from` filter here is a raw IMAP `FROM` search, which performs a
+ * substring/header match (intentional: it feeds the display list and is cheap).
+ * It can over-count when one address contains another. Bulk operations
+ * (move/delete/mark-sender-read) do NOT use this path: they resolve their UID
+ * set via `findUidsByExactSender`, which verifies each candidate's envelope for
+ * an exact, case-insensitive address match so a bulk action never touches
+ * messages from a different sender.
+ */
 export async function rpcFetchEmails({
 	accountId,
 	mailboxPath,
@@ -240,6 +255,7 @@ export async function rpcFetchEmails({
 		await client.logout();
 		return { emails, total: matchedTotal };
 	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		const msg = err instanceof Error ? err.message : String(err);
 		const resp = (err as { response?: unknown })?.response;
 		debugLog(
@@ -390,6 +406,7 @@ export async function rpcFetchEmailDetail({
 		await client.logout();
 		return { email };
 	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		try {
 			await client?.logout();
 		} catch {
@@ -465,6 +482,7 @@ export async function rpcFetchMailboxes({ accountId }: { accountId: string }) {
 		await client.logout();
 		return { mailboxes };
 	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		try {
 			await client?.logout();
 		} catch {
@@ -499,6 +517,7 @@ export async function rpcCreateMailbox({
 
 		return { success: true };
 	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		try {
 			await client?.logout();
 		} catch {
@@ -538,6 +557,7 @@ export async function rpcMoveEmail({
 		await client.logout();
 		return { success: true };
 	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		try {
 			await client?.logout();
 		} catch {
@@ -585,6 +605,7 @@ export async function rpcDeleteEmail({
 		await client.logout();
 		return { success: true };
 	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		try {
 			await client?.logout();
 		} catch {

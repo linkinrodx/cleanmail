@@ -5,7 +5,7 @@ import {
 	RefreshCwIcon,
 	TrashIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { ActionOverlayPending } from "@/components/ActionOverlayPending";
 import { ActionOverlaySuccess } from "@/components/ActionOverlaySuccess";
 import { EmailsPagination } from "@/components/EmailsPagination";
@@ -20,6 +20,7 @@ import {
 	useSenderEmails,
 } from "@/hooks/queries/useSenderEmails";
 import { useMailboxes } from "@/hooks/queries/useMailboxes";
+import { useQueuedAction } from "@/hooks/useQueuedAction";
 import { registerSuggestionJob } from "@/lib/suggestion-jobs";
 
 type GroupDetailPageProps = {
@@ -86,53 +87,47 @@ export function GroupDetailPage({
 	const trashPath = mailboxes.find((m) => m.specialUse === "\\Trash")?.path;
 
 	const moveMut = useApplyMoveAction(accountId);
-	const { jobs, setJobStatus } = useApplyActionContext();
-
-	const [jobId, setJobId] = useState<string | null>(null);
-	const jobState = jobId ? jobs[jobId] : undefined;
-	const isApplying =
-		jobState?.status === "pending" || jobState?.status === "running";
-	const isSuccess = jobState?.status === "success";
-	const handledRef = useRef(false);
-
-	function runMove(toMailboxPath: string) {
-		const id = crypto.randomUUID();
-		handledRef.current = false;
-		setJobId(id);
-		setJobStatus(id, { status: "pending" });
-		registerSuggestionJob(id, {
-			accountId,
-			mailboxPath,
-			authorEmail: decodedAuthorEmail,
-		});
-		moveMut.mutate({
-			jobId: id,
-			accountId,
-			authorEmail: decodedAuthorEmail,
-			fromMailboxPath: mailboxPath,
-			toMailboxPath,
-		});
-	}
+	const { jobs } = useApplyActionContext();
+	const { start, isApplying, isSuccess, jobId } = useQueuedAction({
+		successDelay: 1200,
+		onSuccess: onBack,
+	});
 
 	function handleArchive() {
 		if (isApplying || !archivePath) return;
-		runMove(archivePath);
+		start((vars) => {
+			registerSuggestionJob(vars.jobId, {
+				accountId,
+				mailboxPath,
+				authorEmail: decodedAuthorEmail,
+			});
+			moveMut.mutate({
+				...vars,
+				accountId,
+				authorEmail: decodedAuthorEmail,
+				fromMailboxPath: mailboxPath,
+				toMailboxPath: archivePath,
+			});
+		});
 	}
 
 	function handleTrash() {
 		if (isApplying || !trashPath) return;
-		runMove(trashPath);
+		start((vars) => {
+			registerSuggestionJob(vars.jobId, {
+				accountId,
+				mailboxPath,
+				authorEmail: decodedAuthorEmail,
+			});
+			moveMut.mutate({
+				...vars,
+				accountId,
+				authorEmail: decodedAuthorEmail,
+				fromMailboxPath: mailboxPath,
+				toMailboxPath: trashPath,
+			});
+		});
 	}
-
-	// The completion toast + cache cleanup run globally (SuggestionJobWatcher),
-	// so they fire even if the user navigates away mid-job. Here we only return
-	// to the list once the success overlay has shown briefly.
-	useEffect(() => {
-		if (!isSuccess || handledRef.current) return;
-		handledRef.current = true;
-		const t = setTimeout(() => onBack(), 1200);
-		return () => clearTimeout(t);
-	}, [isSuccess, onBack]);
 
 	return (
 		<div className="flex h-svh w-full min-w-0 flex-col overflow-hidden bg-background">
@@ -240,7 +235,13 @@ export function GroupDetailPage({
 					</>
 				)}
 				{isApplying ? (
-					<ActionOverlayPending text="Applying to all emails from this sender…" />
+					<ActionOverlayPending
+						text={
+							jobId && jobs[jobId]?.progress
+								? `Moving ${jobs[jobId]?.progress?.done?.toLocaleString() ?? "0"}/${jobs[jobId]?.progress?.total?.toLocaleString() ?? "0"}…`
+								: "Applying to all emails from this sender…"
+						}
+					/>
 				) : null}
 				{isSuccess ? <ActionOverlaySuccess text="Done!" /> : null}
 			</main>
