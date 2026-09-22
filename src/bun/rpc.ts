@@ -32,6 +32,7 @@ import {
 	rpcMoveEmail,
 } from "./imap";
 import { setNotifyWebview } from "./jobs";
+import { setOAuthNotifier } from "./oauth";
 import { rpcFetchSenderEmails } from "./senderEmails";
 
 export const rpc = BrowserView.defineRPC<CleanMailRPC>({
@@ -72,3 +73,4 @@ export const rpc = BrowserView.defineRPC<CleanMailRPC>({
 
 setNotifyWebview((update) => rpc.send.actionStatusUpdate(update));
 setScanNotifier((p) => rpc.send.groupScanProgress(p));
+setOAuthNotifier((msg) => rpc.send.oauthComplete(msg));

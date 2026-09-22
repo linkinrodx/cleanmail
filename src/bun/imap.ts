@@ -106,6 +106,12 @@ export async function findUidsByExactSender(
 	return exact;
 }
 
+/**
+ * Count messages from an exact sender in a mailbox. Never throws: a transient
+ * IMAP failure (auth/network) is reported via `error` so callers can
+ * distinguish "genuinely zero messages" from "could not verify" instead of
+ * silently discarding a user action.
+ */
 export async function countEmailsFrom({
 	accountId,
 	mailboxPath,
@@ -114,10 +120,10 @@ export async function countEmailsFrom({
 	accountId: string;
 	mailboxPath: string;
 	authorEmail: string;
-}): Promise<number> {
+}): Promise<{ count: number; error?: string }> {
 	const account = await getAccountById(accountId);
 	if (!account) {
-		return 0;
+		return { count: 0, error: "Account not found" };
 	}
 
 	let client: ImapFlow | undefined;
@@ -134,15 +140,16 @@ export async function countEmailsFrom({
 		}
 
 		await client.logout();
-		return count;
+		return { count };
 	} catch (err) {
 		invalidateAccessTokenOnAuthFailure(account, err);
+		const m = err instanceof Error ? err.message : String(err);
 		try {
 			await client?.logout();
 		} catch {
 			// ignore logout errors
 		}
-		return 0;
+		return { count: 0, error: m };
 	}
 }
 

@@ -5,7 +5,7 @@ import type {
 } from "../shared/rpc-types";
 import { countEmailsFrom } from "./imap";
 import { jobQueue } from "./jobs";
-import { readActions, writeActions } from "./storage";
+import { readActions, serializeActions, writeActions } from "./storage";
 
 export const rpcGetActions = async ({ accountId }: { accountId?: string }) => {
 	try {
@@ -29,43 +29,53 @@ export const rpcAddAction = async (newAction: PersistedAction) => {
 				? newAction.data.fromMailboxPath
 				: newAction.data.mailboxPath;
 
-		const matchCount = await countEmailsFrom({
+		const matchResult = await countEmailsFrom({
 			accountId: newAction.data.accountId,
 			mailboxPath: mailboxToSearch,
 			authorEmail: newAction.data.authorEmail,
 		});
 
-		if (matchCount <= 0) {
+		// A failing count is a transient IMAP/account error, not "nothing to
+		// match": surface it instead of silently dropping the user's action.
+		if (matchResult.error) {
+			return { success: false, error: matchResult.error };
+		}
+
+		// Genuinely zero matching messages: nothing to do, same as before.
+		if (matchResult.count <= 0) {
 			return { success: true };
 		}
 
-		const actions = await readActions();
+		return serializeActions(async () => {
+			const actions = await readActions();
 
-		const isDuplicate = actions.some((a) => {
-			if (a.action === "MOVE" && newAction.action === "MOVE") {
-				return (
-					a.data.accountId === newAction.data.accountId &&
-					a.data.authorEmail === newAction.data.authorEmail &&
-					a.data.fromMailboxPath === newAction.data.fromMailboxPath &&
-					a.data.toMailboxPath === newAction.data.toMailboxPath
-				);
+			const isDuplicate = actions.some((a) => {
+				if (a.action === "MOVE" && newAction.action === "MOVE") {
+					return (
+						a.data.accountId === newAction.data.accountId &&
+						a.data.authorEmail === newAction.data.authorEmail &&
+						a.data.fromMailboxPath === newAction.data.fromMailboxPath &&
+						a.data.toMailboxPath === newAction.data.toMailboxPath
+					);
+				}
+				if (a.action === "DELETE" && newAction.action === "DELETE") {
+					return (
+						a.data.accountId === newAction.data.accountId &&
+						a.data.authorEmail === newAction.data.authorEmail &&
+						a.data.mailboxPath === newAction.data.mailboxPath
+					);
+				}
+				return false;
+			});
+
+			if (!isDuplicate) {
+				// Build a fresh array — never mutate the store's cached list in
+				// place, so a failed write can't leave an unsaved action behind.
+				await writeActions([...actions, newAction]);
 			}
-			if (a.action === "DELETE" && newAction.action === "DELETE") {
-				return (
-					a.data.accountId === newAction.data.accountId &&
-					a.data.authorEmail === newAction.data.authorEmail &&
-					a.data.mailboxPath === newAction.data.mailboxPath
-				);
-			}
-			return false;
+
+			return { success: true };
 		});
-
-		if (!isDuplicate) {
-			actions.push(newAction);
-			await writeActions(actions);
-		}
-
-		return { success: true };
 	} catch (err) {
 		return {
 			success: false,
@@ -76,9 +86,11 @@ export const rpcAddAction = async (newAction: PersistedAction) => {
 
 export const rpcRemoveAction = async ({ id }: { id: string }) => {
 	try {
-		const actions = await readActions();
-		const filtered = actions.filter((a) => a.id !== id);
-		await writeActions(filtered);
+		await serializeActions(async () => {
+			const actions = await readActions();
+			const filtered = actions.filter((a) => a.id !== id);
+			await writeActions(filtered);
+		});
 
 		return { success: true };
 	} catch (err) {

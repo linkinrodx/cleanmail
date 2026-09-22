@@ -3,15 +3,43 @@ import keytar from "keytar";
 import type {
 	Account,
 	AccountProvider,
+	OAuthCompleteMessage,
 	OAuthTokens,
 } from "../shared/rpc-types";
 import { debugLog } from "./debug";
-import { rpc } from "./rpc";
-import { getAccountById, writeAccounts } from "./storage";
+import {
+	getAccountById,
+	readAccounts,
+	serializeAccounts,
+	writeAccounts,
+} from "./storage";
 
 const KEYTAR_SERVICE = "cleanmail";
 const KEYTAR_ACCOUNT_OAUTH = (accountId: string) =>
 	`cleanmail:acct:${accountId}:oauth`;
+
+/**
+ * Injected by rpc.ts once the RPC surface is defined. Routing OAuth completion
+ * pushes through this setter (the same pattern as `setNotifyWebview` /
+ * `setScanNotifier`) breaks the `rpc.ts -> accounts.ts -> oauth.ts -> rpc.ts`
+ * import cycle.
+ */
+let oauthNotifier: (msg: OAuthCompleteMessage) => void = () => {};
+
+export function setOAuthNotifier(
+	fn: (msg: OAuthCompleteMessage) => void,
+): void {
+	oauthNotifier = fn;
+}
+
+/** Push an OAuth completion frame without letting a webview hiccup abort it. */
+function safeNotify(msg: OAuthCompleteMessage): void {
+	try {
+		oauthNotifier(msg);
+	} catch {
+		// webview may not be ready yet — drop this frame
+	}
+}
 
 // In-memory cache of live access tokens keyed by accountId. `getValidAccessToken`
 // serves a cached token while it still has this much runway left, avoiding a
@@ -59,14 +87,8 @@ export function isOAuth401Error(err: unknown): boolean {
 /**
  * Drop the in-memory access-token cache entry for an OAuth account so the next
  * `getValidAccessToken` call fetches a fresh token instead of reusing a dead one.
- */
-export function invalidateAccessTokenCache(accountId: string): void {
-	accessTokenCache.delete(accountId);
-}
-
-/**
- * Convenience wrapper for IMAP error paths: invalidate the token cache only when
- * the account actually authenticates with OAuth2 AND the error looks like a 401.
+ * (The exported `invalidateAccessTokenCache` sibling was removed — it had no
+ * callers; this wrapper is what the IMAP error paths use.)
  */
 export function invalidateAccessTokenOnAuthFailure(
 	account: Account,
@@ -444,8 +466,10 @@ async function exchangeCodeForTokens(
 
 	const safeBody = await readBodySafely(response);
 	if (!response.ok) {
+		// Never log the request body: it carries client_secret, code and
+		// code_verifier. Log only the parameter NAMES for debugging.
 		debugLog(
-			`[oauth] tokenExchange FAILED provider=${provider} status=${response.status} clientIdSet=${!!clientId} content-type=${response.headers.get("content-type")} bodySent=${body.toString().replace(clientId, "<CLIENT_ID>")}`,
+			`[oauth] tokenExchange FAILED provider=${provider} status=${response.status} clientIdSet=${!!clientId} content-type=${response.headers.get("content-type")} bodyKeys=${Object.keys(body).join(",")}`,
 		);
 		debugLog(`[oauth] tokenExchange errorResponse=${safeBody}`);
 		throw new Error(`Token exchange failed: ${response.status} ${safeBody}`);
@@ -538,14 +562,16 @@ export async function refreshAccessToken(
 	};
 }
 
-export async function getValidAccessToken(accountId: string): Promise<string> {
-	// Serve the cached access token while it still has runway (refresh 60s
-	// before expiry) instead of hitting the provider on every IMAP connect.
-	const cached = accessTokenCache.get(accountId);
-	if (cached && cached.expiresAt - Date.now() > ACCESS_TOKEN_CACHE_BUFFER_MS) {
-		return cached.accessToken;
-	}
+/**
+ * In-flight access-token refreshes keyed by accountId. Two concurrent RPCs for
+ * the same account both miss `accessTokenCache` and would otherwise refresh
+ * twice — Microsoft rotates refresh tokens, so the loser could persist a stale
+ * one. Concurrent callers await the same promise instead; the entry is removed
+ * in `finally`.
+ */
+const inFlightRefreshes = new Map<string, Promise<string>>();
 
+async function refreshAndCacheAccessToken(accountId: string): Promise<string> {
 	const stored = await keytar.getPassword(
 		KEYTAR_SERVICE,
 		KEYTAR_ACCOUNT_OAUTH(accountId),
@@ -583,6 +609,31 @@ export async function getValidAccessToken(accountId: string): Promise<string> {
 	return newTokens.accessToken;
 }
 
+export async function getValidAccessToken(accountId: string): Promise<string> {
+	// Serve the cached access token while it still has runway (refresh 60s
+	// before expiry) instead of hitting the provider on every IMAP connect.
+	const cached = accessTokenCache.get(accountId);
+	if (cached && cached.expiresAt - Date.now() > ACCESS_TOKEN_CACHE_BUFFER_MS) {
+		return cached.accessToken;
+	}
+
+	// Join an in-flight refresh for this account rather than starting a second
+	// (providers may rotate refresh tokens, so a duplicate refresh can persist
+	// a stale token and break the account until re-auth).
+	const inFlight = inFlightRefreshes.get(accountId);
+	if (inFlight !== undefined) {
+		return inFlight;
+	}
+
+	const refresh = refreshAndCacheAccessToken(accountId);
+	inFlightRefreshes.set(accountId, refresh);
+	try {
+		return await refresh;
+	} finally {
+		inFlightRefreshes.delete(accountId);
+	}
+}
+
 export function openBrowser(url: string): void {
 	const platform = process.platform;
 	let command: string[];
@@ -607,9 +658,6 @@ export function openBrowser(url: string): void {
 
 type PendingState = {
 	codeVerifier: string;
-	resolve: (
-		value: { account: Account } | { error: string; provider?: AccountProvider },
-	) => void;
 	provider: AccountProvider;
 	createdAt: number;
 };
@@ -639,7 +687,6 @@ function startCallbackServer(): void {
 	if (callbackServerStarted) {
 		return;
 	}
-	callbackServerStarted = true;
 
 	const port = getPort();
 	const path = getPath();
@@ -663,7 +710,6 @@ function startCallbackServer(): void {
 					debugLog(`[oauth] callback got OAuth error from provider: ${error}`);
 					const pending = pendingStates.get(state ?? "");
 					if (pending) {
-						pending.resolve({ error, provider: pending.provider });
 						pendingStates.delete(state ?? "");
 					}
 					// Stop server after handling error
@@ -722,9 +768,7 @@ function startCallbackServer(): void {
 						pending.codeVerifier,
 					);
 
-					const result = { account };
-					pending.resolve(result);
-					rpc.send.oauthComplete(result);
+					safeNotify({ account });
 
 					// Stop server after successful completion
 					callbackServerStarted = false;
@@ -752,11 +796,7 @@ function startCallbackServer(): void {
 					debugLog(
 						`[oauth] callback ERROR (provider=${pending.provider}): ${errorMsg}${cause}${stack}`,
 					);
-					pending.resolve({ error: errorMsg, provider: pending.provider });
-					rpc.send.oauthComplete({
-						error: errorMsg,
-						provider: pending.provider,
-					});
+					safeNotify({ error: errorMsg, provider: pending.provider });
 
 					// Stop server after error
 					callbackServerStarted = false;
@@ -778,22 +818,17 @@ function startCallbackServer(): void {
 		debugLog(
 			`[oauth] callback server FAILED to start on port ${port} (already in use by another instance?): ${String(err)}`,
 		);
+		// Do NOT set callbackServerStarted: a transient failure (port busy)
+		// must not wedge OAuth for the rest of the session. Next attempt retries.
+		return;
 	}
+
+	// Only mark the server as running once Bun.serve actually bound the port.
+	callbackServerStarted = true;
 
 	console.log(
 		`OAuth callback server listening on http://localhost:${port}${path}`,
 	);
-}
-
-async function readAccountsInternal(): Promise<Account[]> {
-	try {
-		const { readAccounts } = await import("./storage");
-		// await, not return: readAccounts() is async and a returned (un-awaited)
-		// rejection would bypass this try/catch entirely.
-		return await readAccounts();
-	} catch {
-		return [];
-	}
 }
 
 // Shared completion pipeline for BOTH the callback server and the manual
@@ -888,7 +923,10 @@ async function completeAuthorization(
 		JSON.stringify({ refreshToken: tokens.refreshToken }),
 	);
 
-	await writeAccounts([...(await readAccountsInternal()), account]);
+	await serializeAccounts(async () => {
+		const accounts = await readAccounts();
+		await writeAccounts([...accounts, account]);
+	});
 
 	debugLog(
 		`[oauth] SUCCESS provider=${provider} email=${email} accountId=${account.id}`,
@@ -906,11 +944,11 @@ async function finalizeOAuth(
 > {
 	try {
 		const account = await completeAuthorization(provider, code, codeVerifier);
-		rpc.send.oauthComplete({ account });
+		safeNotify({ account });
 		return { success: true, account };
 	} catch (err) {
 		const errorMsg = err instanceof Error ? err.message : String(err);
-		rpc.send.oauthComplete({ error: errorMsg, provider });
+		safeNotify({ error: errorMsg, provider });
 		return { success: false, error: errorMsg };
 	}
 }
@@ -943,7 +981,6 @@ export async function beginOAuthFlow(
 
 	pendingStates.set(state, {
 		codeVerifier,
-		resolve: () => {},
 		provider,
 		createdAt: Date.now(),
 	});

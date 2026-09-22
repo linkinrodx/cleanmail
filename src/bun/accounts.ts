@@ -6,7 +6,12 @@ import type {
 	BeginOAuthResult,
 	CompleteOAuthParams,
 } from "../shared/rpc-types";
-import { readAccounts, writeAccounts, getAccountById } from "./storage";
+import {
+	getAccountById,
+	readAccounts,
+	serializeAccounts,
+	writeAccounts,
+} from "./storage";
 import { beginOAuthFlow, completeOAuthManually } from "./oauth";
 
 const KEYTAR_SERVICE = "cleanmail";
@@ -58,7 +63,10 @@ export async function rpcAddAccountPassword({
 			KEYTAR_ACCOUNT_PASSWORD(account.id),
 			password,
 		);
-		await writeAccounts([...(await readAccounts()), account]);
+		await serializeAccounts(async () => {
+			const accounts = await readAccounts();
+			await writeAccounts([...accounts, account]);
+		});
 
 		return { success: true, account };
 	} catch (err) {
@@ -101,9 +109,11 @@ export async function rpcCompleteOAuth({
 
 export async function rpcRemoveAccount({ id }: { id: string }) {
 	try {
-		const accounts = await readAccounts();
-		const filtered = accounts.filter((a) => a.id !== id);
-		await writeAccounts(filtered);
+		await serializeAccounts(async () => {
+			const accounts = await readAccounts();
+			const filtered = accounts.filter((a) => a.id !== id);
+			await writeAccounts(filtered);
+		});
 
 		await keytar.deletePassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT_PASSWORD(id));
 		await keytar.deletePassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT_OAUTH(id));

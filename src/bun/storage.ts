@@ -51,20 +51,20 @@ const LEGACY_KEYTAR_PASSWORD = "imap-password";
 
 export async function readActions(): Promise<PersistedAction[]> {
 	if (actionsCache !== null) {
-		return actionsCache;
+		return [...actionsCache];
 	}
 	try {
 		const file = Bun.file(ACTIONS_FILE);
 		const exists = await file.exists();
 		if (!exists) {
 			actionsCache = [];
-			return actionsCache;
+			return [];
 		}
 
 		const content = await file.json();
 		const actions = content as PersistedAction[];
 		actionsCache = actions;
-		return actions;
+		return [...actions];
 	} catch {
 		return [];
 	}
@@ -73,7 +73,23 @@ export async function readActions(): Promise<PersistedAction[]> {
 export async function writeActions(actions: PersistedAction[]): Promise<void> {
 	await mkdir(APP_DATA_DIR, { recursive: true });
 	await Bun.write(ACTIONS_FILE, JSON.stringify(actions, null, 2));
-	actionsCache = actions; // write-through
+	actionsCache = [...actions]; // write-through (clone: never hand out the internal ref)
+}
+
+/**
+ * Serialize actions read-modify-write cycles. Mirrors `serializeSuggestions`:
+ * all concurrent mutations of `actions.json` queued through here so a
+ * read-modify-write can't lose entries (single process, but the async
+ * interleaving is real). The chain never breaks on a rejected task.
+ */
+let actionsChain: Promise<unknown> = Promise.resolve();
+export function serializeActions<T>(task: () => Promise<T>): Promise<T> {
+	const result = actionsChain.then(task, task);
+	actionsChain = result.then(
+		() => undefined,
+		() => undefined,
+	);
+	return result;
 }
 
 /**
@@ -189,7 +205,7 @@ export function removeSenderFromSuggestionCache(
 
 export async function readAccounts(): Promise<Account[]> {
 	if (accountsCache !== null) {
-		return accountsCache;
+		return [...accountsCache];
 	}
 	try {
 		const file = Bun.file(ACCOUNTS_FILE);
@@ -202,7 +218,7 @@ export async function readAccounts(): Promise<Account[]> {
 			accounts = content as Account[];
 		}
 		accountsCache = accounts;
-		return accounts;
+		return [...accounts];
 	} catch {
 		return [];
 	}
@@ -259,7 +275,23 @@ async function migrateLegacyConfig(): Promise<Account[]> {
 export async function writeAccounts(accounts: Account[]): Promise<void> {
 	await mkdir(APP_DATA_DIR, { recursive: true });
 	await Bun.write(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2));
-	accountsCache = accounts; // write-through
+	accountsCache = [...accounts]; // write-through (clone: never hand out the internal ref)
+}
+
+/**
+ * Serialize accounts read-modify-write cycles. Mirrors `serializeSuggestions`:
+ * all concurrent mutations of `accounts.json` queued through here so a
+ * read-modify-write can't lose entries (single process, but the async
+ * interleaving is real). The chain never breaks on a rejected task.
+ */
+let accountsChain: Promise<unknown> = Promise.resolve();
+export function serializeAccounts<T>(task: () => Promise<T>): Promise<T> {
+	const result = accountsChain.then(task, task);
+	accountsChain = result.then(
+		() => undefined,
+		() => undefined,
+	);
+	return result;
 }
 
 export async function getAccountById(id: string): Promise<Account | null> {

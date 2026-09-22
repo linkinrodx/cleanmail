@@ -3,6 +3,7 @@ import type { GroupEmailsParams, SenderGroup } from "../shared/rpc-types";
 import { debugLog } from "./debug";
 import { recommendAction } from "./heuristics";
 import { createImapClient, ENVELOPE_FETCH_BATCH } from "./imap";
+import { invalidateAccessTokenOnAuthFailure } from "./oauth";
 import { getAccountById } from "./storage";
 
 /**
@@ -150,6 +151,7 @@ export async function scanGroups(
 		await client.logout();
 		return { groups };
 	} catch (err) {
+		invalidateAccessTokenOnAuthFailure(account, err);
 		const e = err as { responseStatus?: string; responseText?: string };
 		const base = err instanceof Error ? err.message : String(err);
 		const detail = [base, e.responseStatus, e.responseText]

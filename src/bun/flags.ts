@@ -8,6 +8,13 @@ import { createImapClient, findUidsByExactSender } from "./imap";
 import { invalidateAccessTokenOnAuthFailure } from "./oauth";
 import { getAccountById } from "./storage";
 
+/**
+ * UIDs flagged per `messageFlagsAdd` call. Small batches keep a single command
+ * under the server's sequence-list limits when a sender has thousands of
+ * messages — matches `BATCH_SIZE = 200` used by the bulk job queue (jobs.ts).
+ */
+const BATCH_SIZE = 200;
+
 /** Add or remove the `\Seen` flag on a single message. */
 export async function rpcMarkEmailRead({
 	accountId,
@@ -117,9 +124,10 @@ export async function rpcMarkSenderRead({
 		let updatedCount = 0;
 		try {
 			const exactUids = await findUidsByExactSender(client, authorEmail);
-			if (exactUids.length > 0) {
-				await client.messageFlagsAdd(exactUids, ["\\Seen"], { uid: true });
-				updatedCount = exactUids.length;
+			for (let i = 0; i < exactUids.length; i += BATCH_SIZE) {
+				const batch = exactUids.slice(i, i + BATCH_SIZE);
+				await client.messageFlagsAdd(batch, ["\\Seen"], { uid: true });
+				updatedCount += batch.length;
 			}
 		} finally {
 			lock.release();
