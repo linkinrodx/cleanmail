@@ -45,6 +45,7 @@ export function EmailTable({
 		{ id: "date", desc: true },
 	]);
 	const [selectedUid, setSelectedUid] = useState<number | null>(null);
+	const [pendingUid, setPendingUid] = useState<number | null>(null);
 
 	const { draggingUid, setDraggingUid, registerDropHandler } = useDragContext();
 	const { addAction } = useActionsContext();
@@ -73,10 +74,13 @@ export function EmailTable({
 
 			const uid = draggingUid;
 
+			// Resolve the author before the optimistic update removes the row
+			// from the cached list, otherwise `addAction` would be skipped.
 			const email = emails.find((e) => e.uid === uid);
 			const authorEmail = email ? extractEmailAddress(email.from) : "";
 
-			const toastId = toast.loading("Moving email…");
+			setPendingUid(uid);
+			const toastId = toast.loading("Moving email...");
 
 			moveEmail(
 				{ uid, toMailboxPath },
@@ -106,6 +110,7 @@ export function EmailTable({
 							{ id: toastId },
 						);
 					},
+					onSettled: () => setPendingUid(null),
 				},
 			);
 		});
@@ -133,25 +138,46 @@ export function EmailTable({
 	}
 
 	function handleDelete(uid: number) {
+		if (pendingUid === uid) {
+			return;
+		}
+
 		const email = emails.find((e) => e.uid === uid);
 		const authorEmail = email ? extractEmailAddress(email.from) : "";
 
+		setPendingUid(uid);
+		const toastId = toast.loading("Deleting email…");
+
 		deleteEmail(uid, {
 			onSuccess: (result) => {
-				if (result.success && authorEmail) {
-					addAction({
-						type: "delete",
-						uid,
-						authorEmail,
-						accountId,
-						mailboxPath,
+				if (result.success) {
+					toast.success("Email deleted", { id: toastId });
+					if (authorEmail) {
+						addAction({
+							type: "delete",
+							uid,
+							authorEmail,
+							accountId,
+							mailboxPath,
+						});
+					}
+				} else {
+					toast.error(result.error ?? "Failed to delete email", {
+						id: toastId,
 					});
 				}
 			},
+			onError: (err) => {
+				toast.error(
+					err instanceof Error ? err.message : "Failed to delete email",
+					{ id: toastId },
+				);
+			},
+			onSettled: () => setPendingUid(null),
 		});
 	}
 
-	const columns = buildColumns(true, handleDelete);
+	const columns = buildColumns(true, handleDelete, pendingUid);
 
 	const table = useReactTable({
 		data: emails,
@@ -184,17 +210,22 @@ export function EmailTable({
 					{table.getRowModel().rows.map((row) => {
 						const uid = row.original.uid;
 						const isDragging = draggingUid === uid;
+						const isPendingRow = pendingUid === uid;
 
 						return (
 							<TableRow
 								key={row.id}
-								draggable
+								draggable={!isPendingRow}
 								onDragStart={(e) => handleDragStart(e, uid)}
 								onDragEnd={handleDragEnd}
-								onClick={() => setSelectedUid(uid)}
+								onClick={() => {
+									if (!isPendingRow) {
+										setSelectedUid(uid);
+									}
+								}}
 								className={`group/row cursor-grab active:cursor-grabbing cursor-pointer transition-opacity ${
 									isDragging ? "opacity-40" : ""
-								}`}
+								} ${isPendingRow ? "opacity-50 pointer-events-none" : ""}`}
 							>
 								{row.getVisibleCells().map((cell) => (
 									<TableCell key={cell.id}>

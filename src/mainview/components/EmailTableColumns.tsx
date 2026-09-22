@@ -1,11 +1,12 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { GripVerticalIcon, Trash2Icon } from "lucide-react";
+import { GripVerticalIcon, Loader2Icon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Email } from "../../shared/rpc-types";
 
 export function buildColumns(
 	withDragHandle: boolean,
 	onDelete?: (uid: number) => void,
+	pendingUid?: number | null,
 ): ColumnDef<Email>[] {
 	const cols: ColumnDef<Email>[] = [];
 
@@ -88,21 +89,29 @@ export function buildColumns(
 			id: "actions",
 			header: "",
 			size: 32,
-			cell: ({ row }) => (
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					title="Delete"
-					onClick={(e) => {
-						e.stopPropagation();
-						onDelete(row.original.uid);
-					}}
-					className="text-muted-foreground hover:text-destructive"
-				>
-					<Trash2Icon data-icon="inline" />
-					<span className="sr-only">Delete</span>
-				</Button>
-			),
+			cell: ({ row }) => {
+				const isPending = pendingUid === row.original.uid;
+				return (
+					<Button
+						variant="ghost"
+						size="icon-sm"
+						title="Delete"
+						disabled={isPending}
+						onClick={(e) => {
+							e.stopPropagation();
+							onDelete(row.original.uid);
+						}}
+						className="text-muted-foreground hover:text-destructive"
+					>
+						{isPending ? (
+							<Loader2Icon data-icon="inline" className="animate-spin" />
+						) : (
+							<Trash2Icon data-icon="inline" />
+						)}
+						<span className="sr-only">Delete</span>
+					</Button>
+				);
+			},
 		});
 	}
 
